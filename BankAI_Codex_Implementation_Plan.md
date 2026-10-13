@@ -1516,6 +1516,6 @@ checkpoint, update `docs/IMPLEMENTATION_STATUS.md`, and provide the
 exact next step. Do not regenerate the entire repository or discard
 working code.
 
-**Current next step:** follow the agreed phase order, beginning with
-Phases 0 and 1. Track verified completion and outstanding work in
-`docs/IMPLEMENTATION_STATUS.md`.
+**Current next step:** Phases 0–2 are complete. Continue with Phase 3
+authentication and BankSim APIs. Track verified completion and outstanding
+work in `docs/IMPLEMENTATION_STATUS.md`.

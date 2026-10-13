@@ -6,7 +6,7 @@ Updated: 2026-10-13. Implementation authorized by the user; phased delivery.
 |---|---|
 | 0: Repository inspection and documentation | Complete |
 | 1: Local scaffold and infrastructure | Complete; live API/database and frontend checks passed |
-| 2: Models, migrations and fictional seed data | Not started |
+| 2: Models, migrations and fictional seed data | Complete; live migration, repeat seed and integration tests passed |
 | 3: Authentication and BankSim APIs | Not started |
 | 4: Banking dashboard | Not started |
 | 5: LLM adapter and text chat | Not started |
@@ -66,7 +66,47 @@ Docker database. One upstream Starlette warning reports future migration
 from httpx to httpx2 in its test client; current tests pass. No provider
 integrations or agent performance claims have been made.
 
-## Source control handoff
+## Phase 2 implementation and verification
+
+Implemented ten SQLAlchemy models with UUID keys, relationships,
+foreign keys, unique constraints, status/range checks, decimal amounts,
+timezone-aware timestamps and lookup indexes. A composite foreign key
+prevents a card referencing another customer's account. Added Alembic
+revision `0001`, PostgreSQL vector storage, Argon2 demo password hashing,
+and a repeatable seed CLI using stable UUIDs and conflict-safe inserts.
+An advisory transaction lock serializes concurrent seed invocations.
+
+Seeded the local demo database: 3 customers, 4 accounts, 20 transactions,
+4 cards, 3 KYC records, 3 loans, 3 support tickets, 1 audit event,
+1 policy document and 1 chunk. Repeated seeding inserted zero rows.
+Existing passwords, balances and blocked-card state are preserved.
+Policy embeddings remain NULL; retrieval and model integrations are not
+implemented. Conversation and pending-action storage belongs to later phases.
+
+Verification: 20 backend tests passed, including 14 PostgreSQL integration
+cases and 6 unit/infrastructure tests. Integration tests create randomly
+named isolated schemas and remove only those schemas. Checks cover fresh
+upgrade/downgrade/re-upgrade, model/migration drift, repeat seed, password
+hash verification, decimal/transaction reconciliation, constraints,
+cross-customer card linkage and vector storage. `alembic check`, Ruff and
+`pip check` passed. The initial test harness exposed migration-version
+schema fallback; corrected by explicitly isolating its version table.
+Removed only the test-created stale public version marker after verifying
+there were no application tables, then migrated and seeded the demo DB.
+
+Docker verification also passed: `docker compose build backend`, then
+one-off container runs of `python -m alembic upgrade head` and
+`python -m app.seed.demo_data` (zero new inserts). The read-only corpus
+mount and container project paths work. Frontend Docker build and visual
+browser QA remain outside this phase's verified results. Public demo
+counts remained 3 customers / 4 accounts / 20 transactions after tests,
+and no `bankai_test_*` schemas remained.
+
+No new banking endpoints or frontend banking pages are claimed. Phase 1
+UI stays the foundation shell. Existing Starlette test-client deprecation
+warning remains non-failing. No AI provider calls or paid experiments ran.
+
+## Phase 0–1 source control handoff
 
 On 2026-10-13, created a project-local Git repository on `main` and
 configured `origin` as `https://github.com/Dhruvy0804/BankAI.git` at the
@@ -81,6 +121,7 @@ Temporary local API and Vite verification processes were stopped after
 checks. The project's PostgreSQL container remains running with persistent
 data. Follow README commands to start the app again.
 
-After Phase 1 acceptance, implement Phase 2 SQLAlchemy models, Alembic
-migrations and idempotent fictional seed data. Provider credentials are
-not needed for the current foundation.
+Next is Phase 3: authentication, ownership-protected BankSim APIs, pending
+action confirmation for simulated card blocking and loan submission,
+and audit logging. The user requested the Phase 2 GitHub handoff and will
+provide a separate instruction before Phase 3 starts.

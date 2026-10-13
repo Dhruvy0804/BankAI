@@ -15,3 +15,7 @@ contain no user data and are intentionally unauthenticated for local use.
 Authentication, BankSim, chat, RAG, voice and owner evaluation endpoints
 remain planned in the project specification. No placeholder endpoint
 claims to perform those operations.
+
+Phase 2 adds persistence and local migration/seed commands only; this HTTP
+contract is unchanged. Database records are not publicly exposed through
+new API endpoints. `/ready` still checks connectivity, not migration version.

@@ -6,10 +6,11 @@ variants: **2, 3, and 5 total agents**, using the same banking capabilities.
 
 ## Current checkpoint
 
-Phases 0–1: documentation, FastAPI health/readiness, React/TypeScript/Tailwind
-shell, PostgreSQL/pgvector Compose setup, and infrastructure checks.
-Banking data, login, AI, voice, and evaluation execution are subsequent
-phases, not working features yet. See [implementation status](docs/IMPLEMENTATION_STATUS.md).
+Phases 0–2: documentation, health/readiness, frontend shell, PostgreSQL/
+pgvector setup, database models, Alembic migrations, and fictional seed data.
+Login, banking APIs/UI, AI, voice, and evaluation execution are subsequent
+phases. The frontend does not display banking records yet.
+See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 ## Prerequisites
 
@@ -30,6 +31,8 @@ docker compose up -d db
 cd backend
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -c requirements-dev.lock.txt -e '.[dev]'
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m app.seed.demo_data
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -91,9 +94,40 @@ the volume to solve an ordinary connection error.
 - PowerShell script restrictions: use `npm.cmd` and the virtual environment's
   Python executable; activation is unnecessary.
 
-Migrations, seed/reset commands, demo credentials, provider adapters and
-voice setup will be added in their phases. No provider keys are required
-for Phase 1; blank provider values do not represent working integrations.
+## Demo database (Phase 2)
+
+Run migration and seed commands from `backend` as shown above. Migration
+`0001` creates ten application tables and enables pgvector. Seeds include
+3 customers, 4 accounts, 20 transactions, 4 cards, 3 KYC records, 3 loans,
+3 support tickets, 1 audit event, and 1 synthetic policy with 1 chunk.
+Money is stored as exact decimals, timestamps include timezone, and
+transaction totals match the initial account balances.
+
+For local development only, the fictional emails are
+`demo.asha@bankai.example`, `demo.ravi@bankai.example`, and
+`demo.mira@bankai.example`. Their shared demo password is
+`BankAI-demo-only-2026!`, stored in PostgreSQL only as salted Argon2 hashes.
+**Login is not implemented yet.** These are not production credentials.
+
+Repeat seeding safely: existing IDs, passwords, balances and card states
+are preserved. A repeated unchanged seed reports zero inserted records.
+There is no destructive reset command. Test fixtures are disposable; do
+not downgrade or delete the demo database to rerun seeds. Local seed CLI
+rejects remote hosts and non-development mode. This guard is not a
+replacement for future authentication.
+
+Docker backend images now include the migration tooling and mount the
+sample corpus read-only. After starting Compose:
+
+```powershell
+docker compose exec backend python -m alembic upgrade head
+docker compose exec backend python -m app.seed.demo_data
+```
+
+Policy storage is prepared, but embeddings remain NULL until the RAG
+phase configures a provider. No fabricated embeddings are seeded.
+Provider adapters and voice setup will be added in their phases. No
+provider keys are required for Phase 2; blank values are not integrations.
 Replace the placeholder app secret before authentication is implemented.
 
 ## Documentation

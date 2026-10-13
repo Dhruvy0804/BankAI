@@ -4,6 +4,9 @@
 **Updated:** 2026-10-13.
 **Specification:** `../BankAI_Codex_Implementation_Plan.md`.
 
+**Current checkpoint:** Phases 0–2 complete. Next: Phase 3 authentication
+and BankSim APIs. See `IMPLEMENTATION_STATUS.md` for verification evidence.
+
 ## 1. Agreed scope and current state
 
 Build a local voice and text banking assistant using fictional data.

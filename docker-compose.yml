@@ -18,6 +18,8 @@ services:
       retries: 12
   backend:
     build: ./backend
+    volumes:
+      - ./data:/app/data:ro
     environment:
       APP_ENV: development
       DATABASE_URL: postgresql+psycopg://bankai:bankai_dev_only@db:5432/bankai

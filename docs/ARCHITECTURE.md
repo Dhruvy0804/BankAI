@@ -14,7 +14,36 @@ performs SELECT 1 with bounded connection/query waits. Startup does not
 create tables or silently substitute a different database. Frontend
 shows only measured service status and labels future capabilities planned.
 
-## Planned trust boundaries
+## Implemented: Phase 2 persistence
+
+Customers own accounts, cards, one KYC record, loans and support tickets.
+Accounts own transactions; cards optionally reference an account using a
+composite `(account_id, customer_id)` foreign key. Policy documents own
+chunks. Audit rows reference an optional customer and carry action/resource
+metadata without conversation text or secrets. These are ten application
+tables plus Alembic's version table.
+
+Money uses NUMERIC(18,2); rates use NUMERIC(7,4). SQLAlchemy timestamps
+are timezone-aware. Updated timestamps are maintained on ORM updates;
+there is no raw-SQL timestamp trigger. Customer emails must be lowercase
+and unique. Deletion is restricted by foreign keys; destructive cascading
+banking-record deletion is not enabled.
+
+Policy embeddings use nullable, dimension-flexible pgvector values with
+embedding-model metadata. Provider-specific dimensions, validation and a
+similarity index will be selected in Phase 7, once the embedding model is
+known. No vector index or retrieval capability is claimed in this phase.
+
+Alembic revisions contain explicit schema operations independent of mutable
+application metadata. Application startup never auto-creates tables. Seed
+data has stable UUIDs, exact decimal amounts, fixed timestamps, insert-only
+conflict handling and a transaction lock. Reruns do not reset interactive
+changes. Synthetic policy versions use a content checksum.
+
+References: [SQLAlchemy constraints](https://docs.sqlalchemy.org/en/20/core/constraints.html)
+and [Alembic migrations](https://alembic.sqlalchemy.org/en/latest/tutorial.html).
+
+## Planned trust boundaries and workflows
 
 Authentication supplies identity to services. Supervisor routes to
 Account, Card, Loan, or combined Policy/Support: five total agents.
