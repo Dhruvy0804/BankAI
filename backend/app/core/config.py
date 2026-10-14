@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
@@ -18,6 +18,14 @@ class Settings(BaseSettings):
         repr=False,
     )
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    app_secret_key: SecretStr | None = None
+    access_token_expire_minutes: int = Field(default=30, ge=1, le=120)
+    confirmation_expire_seconds: int = Field(default=300, ge=30, le=900)
+
+    @property
+    def auth_configured(self) -> bool:
+        key = self.app_secret_key.get_secret_value() if self.app_secret_key else ""
+        return len(key) >= 32 and not key.lower().startswith(("replace", "change", "demo"))
 
     @field_validator("database_url")
     @classmethod

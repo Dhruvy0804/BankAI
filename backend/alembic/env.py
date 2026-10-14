@@ -11,7 +11,9 @@ target_metadata = Base.metadata
 
 def run(connection):
     context.configure(
-        connection=connection, target_metadata=target_metadata, compare_type=True,
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
         version_table_schema=config.attributes.get("schema"),
         include_object=lambda obj, name, kind, reflected, compare_to: name != "alembic_version",
     )

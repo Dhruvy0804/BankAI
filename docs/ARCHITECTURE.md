@@ -43,7 +43,26 @@ changes. Synthetic policy versions use a content checksum.
 References: [SQLAlchemy constraints](https://docs.sqlalchemy.org/en/20/core/constraints.html)
 and [Alembic migrations](https://alembic.sqlalchemy.org/en/latest/tutorial.html).
 
-## Planned trust boundaries and workflows
+## Implemented: Phase 3 API and transactions
+
+FastAPI dependencies validate a Bearer JWT and load an active customer.
+BankingService receives that trusted customer ID, never one from a request
+body. Ownership-scoped queries return a consistent 404 for missing/foreign
+resources. Schemas reject extra fields and bound amounts, rates and tenure.
+
+Migration `0002` adds pending_actions, bringing the schema to eleven
+application tables. Pending card/loan operations store owner, bound inputs,
+expiry and execution state. Confirmation locks the customer and pending
+action, then checks current card or KYC state. Consumed action, result and
+success audit are committed atomically. Failed operations roll back first,
+then persist a denial audit. The request-scoped session commits before a
+successful HTTP response is sent.
+
+Password hashes use Argon2. Access tokens use HS256 with a private local
+signing key, explicit issuer/audience and required claims. Process-local
+login throttling is intentionally limited to the current local deployment.
+
+## Planned agent and evaluation workflows
 
 Authentication supplies identity to services. Supervisor routes to
 Account, Card, Loan, or combined Policy/Support: five total agents.
@@ -54,7 +73,8 @@ Private evaluation pages call owner-only APIs. A PostgreSQL-backed job
 worker invokes the same graph factory with 2/3/5 roles. Mutable evaluation
 fixtures live separately from demo banking data and persistent results.
 All variants share authorization, action confirmation and scoring rules.
-This architecture is planned; none of these protected workflows exist yet.
+Agent routing and evaluation architecture are planned; the authenticated
+banking service and confirmation logic they will reuse are implemented.
 
 ## Decisions
 

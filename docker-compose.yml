@@ -18,6 +18,9 @@ services:
       retries: 12
   backend:
     build: ./backend
+    env_file:
+      - path: .env
+        required: false
     volumes:
       - ./data:/app/data:ro
     environment:

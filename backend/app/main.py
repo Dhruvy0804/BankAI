@@ -1,16 +1,23 @@
+import logging
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from typing import Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import sessionmaker
+from starlette.exceptions import HTTPException
 
+from app.api.routes import router
 from app.core.config import Settings
+from app.core.errors import APIError
+from app.core.security import LoginLimiter
 
 
 class HealthResponse(BaseModel):
@@ -37,6 +44,7 @@ class ErrorResponse(BaseModel):
 def create_app(
     settings: Settings | None = None,
     database_probe: Callable[[], None] | None = None,
+    session_factory=None,
 ) -> FastAPI:
     config = settings or Settings()
     engine = create_engine(
@@ -50,21 +58,28 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        if not config.auth_configured:
+            logging.getLogger("bankai").warning(
+                "Authentication disabled: configure APP_SECRET_KEY."
+            )
         yield
         engine.dispose()
 
     app = FastAPI(
         title="BankAI API",
-        description="Local prototype using fictional banking data. Phase 1 infrastructure only.",
+        description="BankSim APIs using fictional banking data. Sensitive actions require explicit confirmation.",
         version="0.1.0",
         lifespan=lifespan,
     )
+    app.state.settings = config
+    app.state.session_factory = session_factory or sessionmaker(engine, expire_on_commit=False)
+    app.state.login_limiter = LoginLimiter()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.allowed_origins,
         allow_credentials=False,
-        allow_methods=["GET"],
-        allow_headers=["Content-Type"],
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", "Authorization"],
         expose_headers=["X-Request-ID"],
     )
 
@@ -74,6 +89,54 @@ def create_app(
         response = await call_next(request)
         response.headers["X-Request-ID"] = request.state.request_id
         return response
+
+    def error_response(request, status, code, message):
+        identifier = getattr(request.state, "request_id", str(uuid4()))
+        headers = {"X-Request-ID": identifier}
+        if status == 401:
+            headers["WWW-Authenticate"] = "Bearer"
+        if status == 429:
+            headers["Retry-After"] = "60"
+        return JSONResponse(
+            status_code=status,
+            headers=headers,
+            content={"error": {"code": code, "message": message, "request_id": identifier}},
+        )
+
+    @app.exception_handler(APIError)
+    async def api_error(request, error):
+        return error_response(request, error.status, error.code, error.message)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, error):
+        # Validation inputs can include passwords; never echo them.
+        return error_response(
+            request, 422, "INVALID_INPUT", "Request validation failed. Check the API schema."
+        )
+
+    @app.exception_handler(IntegrityError)
+    async def integrity_error(request, error):
+        return error_response(request, 409, "CONFLICT", "Request conflicts with the current data.")
+
+    @app.exception_handler(SQLAlchemyError)
+    async def database_error(request, error):
+        return error_response(
+            request, 503, "DATABASE_UNAVAILABLE", "Database operation could not be completed."
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_error(request, error):
+        return error_response(
+            request, error.status_code, "HTTP_ERROR", "Request could not be completed."
+        )
+
+    @app.exception_handler(Exception)
+    async def unexpected_error(request, error):
+        return error_response(
+            request, 500, "INTERNAL_ERROR", "Unexpected error. Use the request ID for support."
+        )
+
+    app.include_router(router)
 
     @app.get("/health", response_model=HealthResponse, tags=["Infrastructure"])
     def health():

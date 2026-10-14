@@ -7,7 +7,7 @@ Updated: 2026-10-13. Implementation authorized by the user; phased delivery.
 | 0: Repository inspection and documentation | Complete |
 | 1: Local scaffold and infrastructure | Complete; live API/database and frontend checks passed |
 | 2: Models, migrations and fictional seed data | Complete; live migration, repeat seed and integration tests passed |
-| 3: Authentication and BankSim APIs | Not started |
+| 3: Authentication and BankSim APIs | Complete; 57 tests and live Docker API checks passed |
 | 4: Banking dashboard | Not started |
 | 5: LLM adapter and text chat | Not started |
 | 6: Main five-agent system | Not started |
@@ -106,7 +106,48 @@ No new banking endpoints or frontend banking pages are claimed. Phase 1
 UI stays the foundation shell. Existing Starlette test-client deprecation
 warning remains non-failing. No AI provider calls or paid experiments ran.
 
-## Phase 0–1 source control handoff
+## Phase 3 implementation and verification
+
+Implemented registration and JWT login, Argon2 password verification,
+active-customer identity from signed token claims, ownership-protected
+account/balance/transaction/card/KYC/loan/support APIs, strict request and
+response schemas, transaction filters/pagination, decimal EMI and explicit
+demo eligibility rules. Public registration creates no privileged role.
+
+Migration `0002` adds expiring pending actions. Card blocking and simulated
+loan submission require a separate explicit confirmation tied to the exact
+action and owner. Confirmations recheck current state, lock rows and commit
+action consumption, banking changes and audit events atomically. Repeated
+or simultaneous confirmation cannot duplicate a loan or card operation.
+
+Added minimal success/denial audits, consistent sanitized errors, request
+IDs, local login throttling, authentication configuration checks, and a
+helper that creates a random signing key in ignored `.env` without printing
+it. Missing/placeholder signing keys fail closed. No credentials are committed.
+
+Verification includes protected API integration flows, non-disclosing
+cross-customer 404s, unknown/invalid/expired JWTs, inactive users, strict
+confirmation input, expiry/replay/wrong-action/wrong-owner rejection, changed
+card/KYC state, read/write audit evidence, simultaneous loan confirmation
+using two independent PostgreSQL connections, and transactional rollback
+when an audit write fails. Final run: **57 passed**, one upstream Starlette
+deprecation warning; Ruff and dependency checks passed. Alembic reports
+revision `0002` at head with no model drift. Test cleanup left zero
+temporary `bankai_test_*` schemas. `.env` is confirmed ignored by Git.
+
+Live checks: upgraded local PostgreSQL to `0002`, Alembic found no drift,
+Docker backend built and started healthy with the local signing configuration.
+Actual HTTP login returned a token (not printed), own-account retrieval
+returned two accounts, EMI for INR 12000 at 12% over 12 months returned
+1066.19, and `/docs` returned HTTP 200. These are simulated banking checks,
+not external bank integrations.
+
+Limits: frontend remains the Phase 1 shell (banking UI is Phase 4); auth
+throttling is process-local; no refresh-token/logout revocation flow, MFA,
+action cancellation, agent/voice provider or evaluation runtime exists.
+The existing Starlette test-client deprecation warning remains non-failing.
+
+## Phase 0–1 GitHub handoff
 
 On 2026-10-13, created a project-local Git repository on `main` and
 configured `origin` as `https://github.com/Dhruvy0804/BankAI.git` at the
@@ -117,11 +158,11 @@ files are excluded.
 
 ## Next implementation step
 
-Temporary local API and Vite verification processes were stopped after
-checks. The project's PostgreSQL container remains running with persistent
-data. Follow README commands to start the app again.
+The Docker API and PostgreSQL are running locally; API docs are available
+at http://127.0.0.1:8000/docs. Frontend was not started for this backend phase.
+Use `docker compose stop backend` to stop just the API, retaining database data.
 
-Next is Phase 3: authentication, ownership-protected BankSim APIs, pending
-action confirmation for simulated card blocking and loan submission,
-and audit logging. The user requested the Phase 2 GitHub handoff and will
-provide a separate instruction before Phase 3 starts.
+Next is Phase 4: frontend login/session handling and backend-connected
+banking dashboard, accounts, transactions, cards, loans and support pages.
+The user requested the Phase 3 GitHub handoff on 2026-10-14. Phase 4
+frontend work is authorized but has not been implemented yet.

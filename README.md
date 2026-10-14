@@ -6,10 +6,11 @@ variants: **2, 3, and 5 total agents**, using the same banking capabilities.
 
 ## Current checkpoint
 
-Phases 0–2: documentation, health/readiness, frontend shell, PostgreSQL/
-pgvector setup, database models, Alembic migrations, and fictional seed data.
-Login, banking APIs/UI, AI, voice, and evaluation execution are subsequent
-phases. The frontend does not display banking records yet.
+Phases 0–3: documentation, frontend shell, PostgreSQL/pgvector, migrations,
+fictional data, JWT login/registration, ownership-protected banking APIs,
+confirmed card blocks/loan submissions, and audit events.
+Banking frontend pages, AI, voice, and evaluation execution are subsequent
+phases. The frontend still shows the foundation shell; try APIs via `/docs`.
 See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 ## Prerequisites
@@ -22,15 +23,16 @@ See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 ## Local setup (PowerShell)
 
-From the project root, optionally copy configuration. Defaults already
-support local Phase 1. Never put real banking information in this project.
+From the project root, set up local configuration with the helper below.
+It generates a signing key without printing it and refuses to overwrite an
+existing `.env`. Never put real banking information in this project.
 
 ```powershell
-Copy-Item .env.example .env
 docker compose up -d db
 cd backend
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -c requirements-dev.lock.txt -e '.[dev]'
+.\.venv\Scripts\python.exe -m app.core.setup_local
 .\.venv\Scripts\python.exe -m alembic upgrade head
 .\.venv\Scripts\python.exe -m app.seed.demo_data
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
@@ -48,7 +50,10 @@ Open http://localhost:5173. API docs: http://127.0.0.1:8000/docs.
 `/health` reports process status. `/ready` returns 200 only when a real
 database query succeeds, otherwise a sanitized 503 with request ID.
 The Vite dev proxy forwards frontend `/api/health` and `/api/ready` to
-the backend. Browser credentials are not needed at this infrastructure phase.
+the backend. Banking routes require a Bearer token; infrastructure checks
+remain public. If `.env` already exists, preserve it and configure a random
+`APP_SECRET_KEY` of at least 32 characters. The supplied placeholder is
+rejected; missing/placeholder keys disable authentication with HTTP 503.
 
 ## Docker alternative
 
@@ -60,11 +65,14 @@ docker compose ps
 This is local development, with ports bound to loopback and a Vite dev
 server. It is not a production deployment. PostgreSQL data persists in
 the `bankai_data` volume. `infra/init.sql` enables pgvector on first startup.
+Compose loads the ignored root `.env` for backend authentication and overrides
+its database host with the internal `db` service. Prepare `.env` first.
 
 ## Checks
 
 ```powershell
 cd backend
+$env:BANKAI_RUN_DB_TESTS='1'
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m ruff check app tests
 cd ../frontend
@@ -107,7 +115,7 @@ For local development only, the fictional emails are
 `demo.asha@bankai.example`, `demo.ravi@bankai.example`, and
 `demo.mira@bankai.example`. Their shared demo password is
 `BankAI-demo-only-2026!`, stored in PostgreSQL only as salted Argon2 hashes.
-**Login is not implemented yet.** These are not production credentials.
+Login now works through `/api/v1/auth/login`. These are not production credentials.
 
 Repeat seeding safely: existing IDs, passwords, balances and card states
 are preserved. A repeated unchanged seed reports zero inserted records.
@@ -128,7 +136,28 @@ Policy storage is prepared, but embeddings remain NULL until the RAG
 phase configures a provider. No fabricated embeddings are seeded.
 Provider adapters and voice setup will be added in their phases. No
 provider keys are required for Phase 2; blank values are not integrations.
-Replace the placeholder app secret before authentication is implemented.
+## Try Phase 3 APIs
+
+Start the backend, open `http://127.0.0.1:8000/docs`, and call
+`POST /api/v1/auth/login` with a demo email and password. Copy the returned
+access token into Swagger's **Authorize** Bearer field. Do not put tokens
+in source files or share them. Tokens expire after 30 minutes by default.
+
+- `GET /api/v1/accounts`, `/cards`, `/loans`, `/kyc/status` and `/support/tickets`
+  return only the authenticated customer's fictional records.
+- `GET /api/v1/transactions` supports `limit`, integer `cursor`, `account_id`,
+  `transaction_type`, `status`, date and amount filters.
+- `POST /api/v1/cards/{card_id}/block` returns HTTP 202 and a pending action.
+  It does not change card status. Confirm at `/cards/{card_id}/block/confirm`
+  with `{ "action_id": "returned-uuid", "confirmation": true }`.
+- `POST /api/v1/loans/applications` stages validated demo inputs. Confirm at
+  `/loans/applications/{action_id}/confirm` with `{ "confirmation": true }`.
+- A pending action expires after 5 minutes. Expired, reused, mismatched or
+  another user's confirmations cannot execute. Replays return 409, not a second write.
+- `POST /api/v1/support/tickets` creates an open demo ticket from an explicit request.
+
+See [API details and example bodies](docs/API_SPEC.md). No real transfers,
+credit decisions, identity document collection, or external bank connections exist.
 
 ## Documentation
 

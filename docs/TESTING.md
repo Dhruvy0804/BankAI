@@ -47,3 +47,25 @@ timezone roundtrips, foreign keys, status/range constraints and vector
 storage. It tests the actual PostgreSQL engine, not SQLite substitutes.
 No frontend changes were needed in Phase 2; the Phase 1 UI results remain
 the last frontend checks.
+
+## Phase 3 security and API suite
+
+Final Phase 3 run: **57 tests passed** with PostgreSQL enabled (one
+non-failing upstream Starlette deprecation warning).
+
+Use the same database-test command above. Added tests cover authentication
+claims and expiration, wrong signatures, missing signing configuration,
+registration/login, inactive users, cross-customer access, transaction
+filters, confirmation state transitions, expiry/replay, exact action
+binding, changed card/KYC state, support ownership, sanitized errors and
+audits, throttling, authenticated browser preflight, and EMI edge cases.
+Concurrency uses separate PostgreSQL connections and simultaneous requests
+to the service: only one loan is created. An injected audit-storage failure
+verifies that neither the card change nor pending-action consumption persists.
+
+Unit tests do not require PostgreSQL. Integration tests are opt-in via
+`BANKAI_RUN_DB_TESTS=1` and never reset demo data. Current counts/results
+are in IMPLEMENTATION_STATUS.md. Frontend tests/build were not repeated
+because this phase changes no frontend files; visual UI testing remains
+for Phase 4. Docker build and actual HTTP login/account/EMI checks are
+separate evidence beyond TestClient tests.

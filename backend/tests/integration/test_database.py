@@ -23,7 +23,7 @@ def test_migration_roundtrip_and_model_consistency(migrated_db):
     command.downgrade(config, "base")
     assert not (set(Base.metadata.tables) & set(inspect(connection).get_table_names(schema=schema)))
     command.upgrade(config, "head")
-    assert len(inspect(connection).get_table_names(schema=schema)) == 11
+    assert len(inspect(connection).get_table_names(schema=schema)) == len(Base.metadata.tables) + 1
 
 
 def test_repeat_seed_preserves_changes_and_passwords(migrated_db):

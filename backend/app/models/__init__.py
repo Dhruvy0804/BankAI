@@ -19,9 +19,28 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedMixin, IdentityMixin
+
+
+class PendingAction(IdentityMixin, CreatedMixin, Base):
+    __tablename__ = "pending_actions"
+    __table_args__ = (
+        CheckConstraint("kind IN ('block_card', 'loan_application')", name="kind"),
+        CheckConstraint("status IN ('pending', 'executed', 'cancelled')", name="status"),
+        CheckConstraint("expires_at > created_at", name="expiry"),
+        Index("ix_pending_actions_owner_state", "customer_id", "status"),
+    )
+    customer_id: Mapped[UUID] = mapped_column(ForeignKey("customers.id"))
+    kind: Mapped[str] = mapped_column(String(30))
+    resource_id: Mapped[UUID | None] = mapped_column(ForeignKey("cards.id"))
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    status: Mapped[str] = mapped_column(String(12), server_default="pending")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result_id: Mapped[UUID | None]
 
 
 class Customer(IdentityMixin, CreatedMixin, Base):
