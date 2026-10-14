@@ -10,6 +10,10 @@ Phases 0–4: a working local banking web application with JWT login,
 dashboard, accounts, filtered transactions, cards, demo loans and support.
 It uses the seeded PostgreSQL records and confirmed banking APIs.
 AI chat, agent orchestration, voice and evaluation execution are later phases.
+Phase 8 includes browser voice and actual outbound phone testing: the owner
+starts an approved call and the professor/recipient speaks with BankAI on
+their phone. This is planned, not implemented. Telephone credentials, an
+appropriate provider/caller number and a call budget will be required.
 See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 ## Prerequisites

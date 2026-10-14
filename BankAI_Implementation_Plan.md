@@ -64,6 +64,9 @@ The system demonstrates:
 -   Tool/function calling through controlled backend APIs.
 -   Retrieval-Augmented Generation (RAG) for banking policies and FAQs.
 -   Real-time voice interaction using LiveKit, STT, and TTS.
+-   Actual outbound telephone conversations: an authorized project owner
+    starts a test call, the recipient answers on a normal phone, asks
+    banking questions, and hears spoken BankAI responses using demo data.
 -   Conversation context for follow-up questions.
 -   Secure authentication and per-user authorization.
 -   Explicit confirmation before sensitive simulated operations.
@@ -171,6 +174,14 @@ API/business service → PostgreSQL → response → React UI.
 React UI ↔ LiveKit room ↔ voice agent ↔ STT → shared supervisor/agent
 workflow → approved tool and/or RAG → response text → TTS → LiveKit
 audio output.
+
+**Telephone path:**
+
+Owner starts an approved test call → backend creates a scoped demo session
+and dispatches the voice worker → SIP telephone provider/LiveKit telephony
+calls the recipient → telephone audio enters the LiveKit room → shared
+STT/supervisor/tools/RAG workflow → TTS → spoken response over the phone.
+The recipient does not need to open the website or enable a browser microphone.
 
 Text and voice must use the same underlying banking tools and business
 rules. Text does not require STT/TTS. Voice must not implement separate,
@@ -575,6 +586,17 @@ Never expose LiveKit API secret to the browser. Restrict room identity
 and permissions. The token endpoint must authenticate the user and
 enforce room access.
 
+Planned owner-only telephone endpoints:
+- `POST /api/v1/phone/calls`: explicitly start one allowlisted test call
+  with validated demo context and a request idempotency key.
+- `GET /api/v1/phone/calls` and `GET /api/v1/phone/calls/{call_id}`:
+  owner-scoped call status, masked destination and permitted test evidence.
+- `POST /api/v1/phone/calls/{call_id}/end`: end an active call safely.
+
+Provision owner permissions through trusted local setup before these routes
+are enabled; ordinary registration cannot grant calling privileges. Never
+expose SIP credentials or let an LLM choose a number and initiate calls.
+
 ### 8.10 Private evaluation APIs
 
 Restrict every endpoint to a locally provisioned owner/evaluator role
@@ -843,6 +865,78 @@ audio response as a working voice integration.
 
 ------------------------------------------------------------------------
 
+### 11.4 Actual outbound telephone calling
+
+Actual calling is required by the user's scope update. Implement it after
+browser voice works, using LiveKit SIP telephony and a compatible telephone
+provider with an outbound trunk and provisioned caller number. Confirm
+number availability, permitted destinations, account/trial restrictions and
+pricing during setup; do not assume a local deployment alone can dial phones.
+Provider choice remains open until these requirements and the budget are known.
+
+Use the official [outbound workflow](https://docs.livekit.io/telephony/making-calls/workflow-setup/)
+and [call initiation API](https://docs.livekit.io/telephony/making-calls/outbound-calls/).
+Start the voice worker/room before dialing. The SIP participant carries
+telephone audio into the same five-agent banking system; it is not a sixth
+decision-making agent. Telephone and browser voice share tools, RAG,
+confirmation, clarification and escalation logic.
+
+**Owner and recipient experience:**
+
+1. The owner opens a private Phone Test page, selects an authorized fictional
+   customer/session and an allowlisted destination, and explicitly starts
+   a single call. Display estimated usage and maximum duration before dialing.
+2. The recipient answers a normal phone call. BankAI introduces itself as
+   an AI educational banking demo, explains that data is fictional, and asks
+   whether the recipient wants to continue. No account details are spoken
+   before acceptance. Voicemail must receive no banking information.
+3. The recipient asks questions naturally, such as balance, recent
+   transactions, policy requirements or EMI. The system listens, invokes
+   the shared authorized workflow and speaks verified answers.
+4. Sensitive simulated actions are described aloud and bound to one exact,
+   expiring pending action. Require a fresh, unambiguous confirmation in
+   that call/session; ambiguous speech triggers clarification. DTMF can
+   provide an explicit confirmation where the integration supports it.
+5. The recipient or owner can end the session. The UI shows dialing,
+   ringing, active, ended, failed, cancelled, busy or unanswered outcomes
+   based on provider events, never a fabricated success state.
+
+**Access, lifecycle and evidence:**
+
+- Bind each call to a server-issued, limited demo-session grant derived
+  from the initiating user's authorized fixture. A phone number/caller ID
+  is not authentication; the model cannot pick another customer. This is
+  an invited synthetic-account demo, not phone authentication for real banking.
+- Permit only individually approved/allowlisted test destinations. Validate
+  E.164 numbers server-side, limit concurrency/duration/attempts and enforce
+  the agreed spend limit. No bulk calls or automatic redialing.
+- Store credentials in environment configuration. Mask phone numbers in
+  UI/history/logs and avoid persisting full destination numbers in transcripts.
+- Validate event origin using the supported provider/LiveKit verification
+  mechanism. Handle duplicate, delayed and out-of-order events idempotently;
+  an end/cancel request during dialing must not leave a later-connected call alive.
+- On recipient disconnect, reject queued confirmations, invalidate the
+  session grant, stop the worker and clean up the room/telephone participant.
+  Enforce inactivity and maximum-call-duration timeouts.
+- Raw audio recording is off by default. If saving a transcript for the
+  professor's review, explain it at call start and honor the agreed choice;
+  retain only permitted sanitized evidence. Never save private model reasoning.
+- Missing credentials, insufficient provider balance or denied destinations
+  return clear unavailable/failure states. Browser voice and text remain usable.
+
+**Verification:** test ownership/allowlist checks, number validation,
+idempotent call start, busy/no-answer/provider failure, event verification,
+cancel-versus-connect races, disconnect cleanup, and expired/replayed spoken
+confirmation using provider test fixtures. Then run one agreed, funded live
+test call to an authorized number and verify two-way speech and tool results.
+Do not claim real calling works until that live test has completed.
+
+Inbound public telephone service is not required for this outbound professor
+demo and remains future scope. Keep the primary 2/3/5-agent experiment in
+text; phone quality/latency is a separate demonstration to avoid audio confounds.
+
+------------------------------------------------------------------------
+
 ## 12. Frontend Requirements
 
 Build a polished, responsive, accessible interface suitable for a
@@ -863,6 +957,8 @@ Section 15.2; it is part of the delivered web application.
     citations, tool/action result cards, follow-up questions.
 4.  **Voice Assistant:** LiveKit connect/disconnect, microphone state,
     transcript, assistant response, voice error states.
+    Add a separate owner-only **Phone Test** page for starting one actual
+    call, monitoring its status and ending it. The callee uses their phone.
 5.  **Transactions:** Search/filter, type, date, amount, status.
 6.  **Cards:** List demo cards and their status; initiate simulated
     block flow.
@@ -1050,11 +1146,23 @@ UI. - Integrate STT/TTS providers through adapters. - Connect voice to
 the same supervisor/tool layer. - Add connection, interruption, timeout,
 and provider-error handling.
 
+Split delivery into Phase 8A browser voice and Phase 8B actual outbound
+telephone calling per Section 11.4. Phase 8B adds owner controls, provider/
+SIP configuration, scoped call grants, status events, limits, cleanup and
+an approved live professor/test-recipient call.
+
 Acceptance: - A configured environment can establish a real LiveKit
 voice session. - Speech is transcribed and responses can be spoken. -
 Voice and text use the same banking authorization rules. - If voice
 credentials are missing, text remains functional and the UI reports the
 missing configuration honestly.
+
+Additional acceptance: a configured telephone provider places one actual
+call to an approved test number; the recipient asks questions and receives
+spoken, tool-backed answers. Owner access, recipient acceptance, action
+confirmation and hang-up cleanup are verified. Missing telephone credentials
+are reported as unavailable. Call output is not passed off as measured
+2/3/5-agent benchmark evidence.
 
 ### Phase 9 --- Observability, evaluation, and quality
 
@@ -1438,6 +1546,10 @@ Prepare a reliable end-to-end demo using only fictional data:
     the same scenario against 2, 3 and 5 agents.
 16. Inspect the actual responses, observed agent/tool traces and metrics;
     reopen a saved benchmark and export a report for professor review.
+17. With telephone configuration and recipient agreement in place, start
+    one actual test call from Phone Test. The professor answers, asks about
+    fictional banking data, and hears BankAI responses. End the call and
+    show verified status and permitted evidence.
 
 Never use actual personal or financial information in the demonstration.
 
@@ -1489,6 +1601,8 @@ The project is not complete until:
 -   [ ] RAG ingests sample policies and cites retrieved sources.
 -   [ ] Voice connects through LiveKit when correctly configured.
 -   [ ] Voice and text share the same backend authorization logic.
+-   [ ] Actual outbound phone calling is verified with an approved live test recipient.
+-   [ ] Phone calls have owner access, allowlisted destinations, scoped demo context, explicit confirmations and cleanup on hang-up.
 -   [ ] Unit and integration tests cover the core flows.
 -   [ ] Docker/local setup and environment variables are documented.
 -   [ ] No secrets or real financial data are committed.

@@ -12,7 +12,7 @@ Updated: 2026-10-14. Implementation authorized by the user; phased delivery.
 | 5: LLM adapter and text chat | Not started |
 | 6: Main five-agent system | Not started |
 | 7: RAG | Not started |
-| 8: Voice | Not started |
+| 8A: Browser voice; 8B: actual outbound telephone calling | Not started |
 | 9A–9C: Evaluation engine, web dashboard and benchmark | Not started |
 | 10: Final deployment/demo verification | Not started |
 

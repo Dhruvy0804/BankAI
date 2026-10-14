@@ -14,6 +14,11 @@ The main application uses **5 total agents including the Supervisor**.
 Create 2-agent and 3-agent configurations only for evaluation, and compare
 their actual outputs and measured performance against the main system.
 
+Also deliver actual outbound phone testing: the project owner starts a
+single approved call; the professor/recipient answers on a normal phone,
+asks banking questions and hears BankAI's responses. Browser voice remains
+available. Inbound public calling is outside this minimal outbound demo.
+
 Deliver one web application with two areas: the main banking interface
 and a private evaluation dashboard for the project owner. The dashboard
 must let the owner run, inspect, save, and export comparisons for the
@@ -65,6 +70,14 @@ Text flows through React, authenticated FastAPI routes, the Supervisor,
 specialists, typed tools, BankSim services, and PostgreSQL. Voice uses
 LiveKit and speech adapters to enter the same workflow and speak its
 response. No independent voice decision-making agent is added.
+
+Telephone voice uses a compatible telephone provider/outbound SIP trunk
+to connect the recipient into a LiveKit room. The same supervisor and tools
+handle the conversation; telephony adds no extra banking agent. LiveKit's
+[outbound setup](https://docs.livekit.io/telephony/making-calls/workflow-setup/)
+and [call API](https://docs.livekit.io/telephony/making-calls/outbound-calls/)
+define this integration. Provider choice remains open until destination
+availability, account restrictions, pricing and budget are checked.
 
 Use React/Vite/TypeScript and Tailwind for the interface, FastAPI and
 Pydantic for the API, SQLAlchemy/Alembic for database access, PostgreSQL
@@ -175,13 +188,47 @@ working until it has been exercised with valid configuration.
 | 5: Text chat | LLM adapter, chat endpoint, typed conversation state, provider timeout/error handling | Configured provider responds; missing credentials and failures are reported accurately |
 | 6: Main 5-agent graph | Supervisor, four specialists, registered tools, routing, clarification, confirmation and escalation | Exactly five distinct agent roles; representative intents and multi-turn flows pass; unsafe writes fail |
 | 7: RAG | Synthetic policies, ingestion, chunking, embedding, pgvector retrieval, citations | Repeatable ingestion; expected sources retrieved; unsupported policy answers handled honestly |
-| 8: Voice | Authenticated LiveKit tokens, speech adapters, voice UI, shared graph connection | Real configured voice session handles a banking request; text remains usable if voice is unavailable |
+| 8A: Browser voice | Authenticated LiveKit tokens, speech adapters, voice UI, shared graph connection | Real browser voice handles a banking request; text remains usable if voice is unavailable |
+| 8B: Actual phone calling | Owner-only Phone Test page/API, outbound provider/SIP trunk, scoped demo grants, status events, limits and cleanup | One approved live call connects; recipient asks questions and hears verified answers; confirmation, hang-up and failure paths tested |
 | 9A: Evaluation engine | Shared graph factory, 2/3/5 variants, isolated fixtures, persistent jobs/results, worker, owner-only API and optional CLI | Equivalent capabilities, identical safety rules, safe resets, durable progress and bounded execution |
 | 9B: Evaluation web dashboard | New comparison, progress/cancel, response columns, observed traces, metric charts, history, review scoring, CSV/JSON/HTML exports | Owner can run and reopen comparisons from the browser; non-owner API access denied; exported data matches saved evidence |
 | 9C: Benchmark and quality | Frozen dataset, repeated runs through the shared service, scoring, report, regression/security tests | Measured reproducible comparison; partial/unscored cases handled honestly; isolation, cancellation and refresh/restart cases verified |
 | 10: Delivery | Complete Docker setup, README, demo guide, architecture diagram, final status | Fresh setup and end-to-end demo verified; implemented features and missing configuration clearly documented |
 
 ## 5. Comparative evaluation design
+
+### Telephone demonstration scope
+
+Phase 8B adds owner-only `/api/v1/phone/calls` create/list/status/end APIs.
+Provision owner permission through trusted setup, never self-registration.
+The owner explicitly starts a single call to an allowlisted E.164 number
+with authorized fictional customer context. Issue an expiring per-call
+grant; phone/caller ID is not authentication. Ordinary banking users and
+model tools cannot dial numbers or choose a different customer identity.
+
+Start the shared voice worker before dialing. Introduce the AI educational
+demo on answer and seek recipient acceptance before speaking account data.
+Voicemail receives no account information. Sensitive actions require exact
+pending-action binding and fresh, unambiguous confirmation within that call;
+supported DTMF can be used. Ambiguous speech requests clarification.
+
+Show status and an End call button. Verify event origin and deduplicate
+events. Handle cancellation while ringing, delayed connection, busy/no-answer,
+provider failures and hang-up. Ending a call invalidates its grant/queued
+confirmations and removes its worker/room/participant. Use idempotent start,
+one concurrent call by default, no automatic redial, duration/inactivity
+limits and an agreed enforceable spend cap. Mask numbers in evidence.
+Audio recording is off; saved transcripts require the explained recipient
+choice and sanitization. Missing phone configuration leaves text/browser usable.
+
+Test provider fixtures first, then one explicitly agreed funded live call.
+Results remain unverified without a successful two-way test. Keep phone
+quality/latency separate from the controlled text benchmark for 2/3/5 agents.
+See specification Section 11.4. Add a telephony adapter, owner Phone Test
+page, call-session model/migration and `docs/PHONE_DEMO_GUIDE.md` within
+the existing application.
+
+### Comparative research question
 
 **Research question:** How do 2-, 3-, and 5-agent architectures differ in
 banking task success, output correctness, safe execution, response time,
@@ -282,6 +329,11 @@ a card block, creates a ticket, and demonstrates access isolation.
 Repeat a supported request by voice when configured. Present the
 comparison report separately from the normal banking UI.
 
+Also verify an actual outbound call to an agreed professor/test number:
+the recipient answers, accepts the demo, asks questions, hears responses
+and ends the call. Verify scoped context, action protections and cleanup.
+Credentials, provider credits and an approved destination are required.
+
 For the professor's demonstration, open the private evaluation dashboard,
 run one identical scenario across 2/3/5 agents, inspect outputs and tool
 events, reopen a saved benchmark, show aggregate metrics, and export the
@@ -295,6 +347,8 @@ and exports, measured reproducible comparison, tested security
 and core flows, documented setup, and honest reporting of any missing
 external integrations. Provider credentials must be supplied through
 environment configuration; no real financial information is required.
+Telephone destinations are real contact data used only for explicitly
+requested calls, kept server-side and masked in evidence.
 
 ## 7. Review checkpoint
 
