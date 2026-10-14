@@ -131,3 +131,7 @@ minimal audit metadata. Failures roll back writes before recording a denial.
 There is no public audit-log endpoint. `/health` checks process liveness;
 `/ready` checks database connectivity, not schema version or signing key.
 AI, RAG, voice and evaluation endpoints remain later work.
+
+Phase 4 consumes these contracts through the React banking UI. No API routes
+or database migrations changed. Frontend session handling, confirmations and
+empty/error states do not replace server authorization or action checks.

@@ -48,3 +48,17 @@ voice tokens and export sanitization are later phases, not current claims.
 
 Implementation references: [FastAPI security](https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/)
 and [PyJWT claim validation](https://pyjwt.readthedocs.io/en/latest/usage.html).
+
+Phase 4 stores only the access token and expiry in `sessionStorage`, not
+passwords or customer banking records. On sign-out, expiry or a protected
+401, the session and displayed data are cleared; in-flight read requests are
+aborted and stale completions are ignored. No token is placed in a URL.
+Sessions remain tab-local and are still validated by the backend. Storage is
+JavaScript-readable and is suitable only for this local prototype; use
+HttpOnly-cookie sessions and CSRF protection before public deployment.
+Client sign-out does not revoke an already copied token server-side.
+
+Confirmation dialogs use the native modal dialog for focus containment,
+explicit buttons, exact server-returned action details and expiry. The UI
+prevents duplicate submissions, but server checks remain authoritative.
+No frontend-only role/visibility control is treated as authorization.

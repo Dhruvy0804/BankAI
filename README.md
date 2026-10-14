@@ -6,11 +6,10 @@ variants: **2, 3, and 5 total agents**, using the same banking capabilities.
 
 ## Current checkpoint
 
-Phases 0–3: documentation, frontend shell, PostgreSQL/pgvector, migrations,
-fictional data, JWT login/registration, ownership-protected banking APIs,
-confirmed card blocks/loan submissions, and audit events.
-Banking frontend pages, AI, voice, and evaluation execution are subsequent
-phases. The frontend still shows the foundation shell; try APIs via `/docs`.
+Phases 0–4: a working local banking web application with JWT login,
+dashboard, accounts, filtered transactions, cards, demo loans and support.
+It uses the seeded PostgreSQL records and confirmed banking APIs.
+AI chat, agent orchestration, voice and evaluation execution are later phases.
 See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 ## Prerequisites
@@ -47,6 +46,11 @@ npm.cmd run dev
 ```
 
 Open http://localhost:5173. API docs: http://127.0.0.1:8000/docs.
+Sign in with a fictional demo customer, then use the sidebar to navigate.
+The current tab retains its session across refresh until token expiry or
+sign-out. A 401 returns to login and clears displayed customer data. Closing
+the tab ends its browser session; passwords are not stored. Sign-out clears
+the browser token but does not revoke a separately copied JWT server-side.
 `/health` reports process status. `/ready` returns 200 only when a real
 database query succeeds, otherwise a sanitized 503 with request ID.
 The Vite dev proxy forwards frontend `/api/health` and `/api/ready` to
@@ -136,7 +140,25 @@ Policy storage is prepared, but embeddings remain NULL until the RAG
 phase configures a provider. No fabricated embeddings are seeded.
 Provider adapters and voice setup will be added in their phases. No
 provider keys are required for Phase 2; blank values are not integrations.
-## Try Phase 3 APIs
+## Try the banking web application (Phase 4)
+
+- Dashboard shows balances and recent activity fetched from the backend.
+- Accounts includes an account selector and balance refresh.
+- Transactions supports account/type/status/date/amount filters, previous/next
+  paging, and a clearly labelled search of the current page.
+- Cards stages a block request, then shows the exact card in a confirmation
+  dialog. Cancel dismisses the dialog without executing; the server's pending
+  request expires automatically. No backend cancellation endpoint exists yet.
+- Loans provides API-backed EMI, demo eligibility and confirmed applications.
+- Support creates tickets and shows the customer's saved history and details.
+
+Loading, empty and error states include retry for reads. Writes are never
+retried automatically. After an interrupted write, refresh the relevant
+records to verify its outcome before manually repeating it. Demo changes
+persist; seed reruns do not reset them. AI/evaluation features are marked as
+future work in About and are not simulated as working UI features.
+
+## Try Phase 3 APIs directly
 
 Start the backend, open `http://127.0.0.1:8000/docs`, and call
 `POST /api/v1/auth/login` with a demo email and password. Copy the returned

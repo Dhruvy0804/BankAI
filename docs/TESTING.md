@@ -69,3 +69,44 @@ are in IMPLEMENTATION_STATUS.md. Frontend tests/build were not repeated
 because this phase changes no frontend files; visual UI testing remains
 for Phase 4. Docker build and actual HTTP login/account/EMI checks are
 separate evidence beyond TestClient tests.
+
+## Phase 4 frontend and real-browser QA
+
+From `frontend`: `npm.cmd test` (12 tests passed) and `npm.cmd run build`
+(strict TypeScript and production build passed). The earlier 2 infrastructure
+shell tests were replaced with 12 banking behavior tests. Native dialog APIs
+have a jsdom-only shim; actual focus behavior is validated in Edge.
+
+Tests cover login/logout, restored and expired sessions, stale-read clearing,
+read retry/error states, pagination/filter/empty views, cancel versus confirm,
+duplicate/expired confirmations, server-bound loan details, and ticket form
+input preservation on failure. Existing backend code is unchanged and its
+previous 57 passing tests remain the last backend regression result.
+
+Optional repeatable browser check (Windows, installed Microsoft Edge):
+
+```powershell
+# Run from the project root with the backend environment installed and database running.
+.\backend\.venv\Scripts\python.exe -m pip install --target .qa-tools playwright
+$env:PYTHONPATH=(Resolve-Path '.qa-tools').Path
+.\backend\.venv\Scripts\python.exe frontend/tests/browser_smoke.py
+```
+
+The script generates a unique local `bankai_ui_test_<uuid>` database,
+migrates/seeds it, starts isolated API/Vite processes and uses a fresh Edge
+context. It never resets the demo database and removes its own processes/
+database in cleanup. The database user needs CREATE DATABASE permission
+(provided by the local Docker setup). No browser profile or tokens are saved.
+Tooling is installed only in ignored `.qa-tools`, outside application manifests.
+Screenshots are in ignored `.artifacts`.
+
+Docker frontend build/start was verified separately: HTTP 200 at the root,
+and the frontend proxy returned database readiness from the backend. Wait
+for Vite's ready message before probing a newly started container.
+
+Passed on Edge at 1440px desktop and 390px mobile: login/refresh, all pages,
+card/loan confirmations, keyboard modal cancellation/focus return, EMI,
+support, customer switching, 401 clearing and no page overflow/errors.
+Screenshots were visually inspected. Safari, Firefox and physical-phone
+testing have not been performed. Browser channel setup follows the
+[official Playwright documentation](https://playwright.dev/python/docs/browsers).

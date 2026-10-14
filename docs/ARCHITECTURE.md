@@ -62,7 +62,24 @@ Password hashes use Argon2. Access tokens use HS256 with a private local
 signing key, explicit issuer/audience and required claims. Process-local
 login throttling is intentionally limited to the current local deployment.
 
-## Planned agent and evaluation workflows
+## Implemented: Phase 4 banking frontend
+
+React uses native hash navigation for seven pages (dashboard, accounts,
+transactions, cards, loans, support and about), without a routing dependency.
+A shared fetch function attaches the Bearer token, bounds requests to ten
+seconds, and surfaces sanitized backend errors/request references. Resource
+loads abort on navigation and ignore stale results. Write handlers lock
+submissions and retain form input when a request fails.
+
+The tab stores token/expiry in sessionStorage, reloads `/auth/me` on restore,
+and clears the entire authenticated workspace on sign-out, expiry or 401.
+Customer data is fetched afresh rather than stored in browser persistence.
+All amounts and action results come from the existing BankSim API. Native
+modal dialogs display exact pending action details and send explicit true
+only after the user confirms. Cancel is a local dismissal; pending actions
+expire on the server. AI/voice/evaluation interfaces remain future phases.
+
+## Planned agent and evaluation workflows (later phases)
 
 Authentication supplies identity to services. Supervisor routes to
 Account, Card, Loan, or combined Policy/Support: five total agents.

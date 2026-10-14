@@ -1,6 +1,6 @@
 # Implementation status
 
-Updated: 2026-10-13. Implementation authorized by the user; phased delivery.
+Updated: 2026-10-14. Implementation authorized by the user; phased delivery.
 
 | Phase | Status |
 |---|---|
@@ -8,7 +8,7 @@ Updated: 2026-10-13. Implementation authorized by the user; phased delivery.
 | 1: Local scaffold and infrastructure | Complete; live API/database and frontend checks passed |
 | 2: Models, migrations and fictional seed data | Complete; live migration, repeat seed and integration tests passed |
 | 3: Authentication and BankSim APIs | Complete; 57 tests and live Docker API checks passed |
-| 4: Banking dashboard | Not started |
+| 4: Banking dashboard | Complete; 12 UI tests, build and Edge desktop/mobile flows passed |
 | 5: LLM adapter and text chat | Not started |
 | 6: Main five-agent system | Not started |
 | 7: RAG | Not started |
@@ -147,7 +147,60 @@ throttling is process-local; no refresh-token/logout revocation flow, MFA,
 action cancellation, agent/voice provider or evaluation runtime exists.
 The existing Starlette test-client deprecation warning remains non-failing.
 
-## Phase 0–1 GitHub handoff
+## Phase 4 implementation and verification
+
+Implemented the React banking application using existing dependencies and
+APIs: login, session restoration/expiry/sign-out, dashboard, account details
+and balance refresh, filtered/paged transactions, card blocking, EMI and
+demo loan eligibility/application, ticket creation/history/details, and About.
+All displayed balances, records and success outcomes come from backend data.
+Transaction text search is explicitly limited to the displayed page.
+
+Shared API requests have timeouts, abort stale reads on navigation, and
+surface errors with request references. Signing out or receiving a protected
+401 removes the tab token and unmounts all customer data. Confirmation dialogs
+show exact server-returned details, prevent duplicate submissions, disable
+expired actions, contain keyboard focus and restore it on dismissal.
+Forms preserve input on errors; writes are never automatically retried.
+
+Verification: **12 Vitest/React Testing Library tests passed**; strict
+TypeScript and Vite production build passed. Tests cover login/failed login,
+session restoration/expiry/sign-out, stale results, loading/error retry,
+empty/filter/pagination states, card cancel/confirm, duplicate/expired
+confirmation, bound loan confirmation and support error/success behavior.
+No backend behavior changed, so the previously passed 57 backend tests
+were not repeated for this phase.
+
+Real-browser QA used installed Edge headless against a new disposable local
+PostgreSQL database with its own API/Vite processes. Passed login/refresh,
+account refresh, transactions, card cancel/confirm, keyboard return focus,
+EMI/eligibility/confirmed loan, ticket creation, all navigation pages at
+390px mobile width, customer switching and protected 401 session clearing.
+No browser page errors or horizontal page overflow were detected. Desktop
+and mobile screenshots were inspected. QA servers and generated databases
+were removed; persistent demo records were not reset or changed.
+
+Docker frontend build also passed (npm ci reported zero vulnerabilities).
+The container served HTTP 200 on port 5173 and its `/api/ready` proxy
+returned a connected database. A combined build initially hit a registry
+TLS timeout for the unchanged backend image; building only the frontend
+resolved verification without replacing the backend. The temporary frontend
+container was stopped after checks; backend/database remain available.
+Start the UI with `docker compose up -d frontend`, or use `npm.cmd run dev`.
+
+Resolved verification issues: jsdom lacks native dialog APIs, so tests use
+a dialog shim. Browser testing exposed a missing focus return after modal
+close; fixed in the shared dialog and confirmed with a keyboard check.
+Test locator ambiguities were corrected without changing data behavior.
+
+Limits: browser validation covers Edge only, not Safari/Firefox or a physical
+phone. SessionStorage is JavaScript-readable; keep this demo local. Sign-out
+does not revoke copied JWTs. Modal Cancel dismisses locally and leaves the
+pending server request to expire. Registration UI, AI/voice/evaluation pages
+are not part of this phase. No new application dependencies were added;
+optional browser QA tools and screenshots are ignored by Git.
+
+## Initial GitHub handoff
 
 On 2026-10-13, created a project-local Git repository on `main` and
 configured `origin` as `https://github.com/Dhruvy0804/BankAI.git` at the
@@ -158,11 +211,10 @@ files are excluded.
 
 ## Next implementation step
 
-The Docker API and PostgreSQL are running locally; API docs are available
-at http://127.0.0.1:8000/docs. Frontend was not started for this backend phase.
-Use `docker compose stop backend` to stop just the API, retaining database data.
+Phase 3 was pushed as commit `0033548`. The user requested the Phase 4
+GitHub handoff on 2026-10-14. The renamed specification
+`BankAI_Implementation_Plan.md` is preserved and documentation references it.
 
-Next is Phase 4: frontend login/session handling and backend-connected
-banking dashboard, accounts, transactions, cards, loans and support pages.
-The user requested the Phase 3 GitHub handoff on 2026-10-14. Phase 4
-frontend work is authorized but has not been implemented yet.
+Next is Phase 5: configurable LLM adapter and text chat with bounded provider
+calls and honest configuration/failure reporting. No AI provider calls or
+paid experiments were run during Phase 4.

@@ -1,4 +1,4 @@
-# BankAI --- Full Project Implementation Plan for Codex
+# BankAI --- Full Project Implementation Plan
 
 **Project:** BankAI --- Agentic AI-Powered Voice Banking Assistant\
 **Purpose:** Final-year engineering project\
@@ -11,7 +11,7 @@ subject to configured credentials and the agreed execution budget.
 
 ------------------------------------------------------------------------
 
-## 1. Instructions to Codex
+## 1. Instructions
 
 Act as a senior full-stack engineer, AI engineer, backend architect, and
 security-conscious developer. Build a complete, runnable
@@ -1516,6 +1516,6 @@ checkpoint, update `docs/IMPLEMENTATION_STATUS.md`, and provide the
 exact next step. Do not regenerate the entire repository or discard
 working code.
 
-**Current next step:** Phases 0–3 are complete. Continue with Phase 4
-frontend login and banking dashboard. Track verified completion and outstanding
+**Current next step:** Phases 0–4 are complete. Continue with Phase 5
+text chat and configurable LLM provider interface. Track verified completion and outstanding
 work in `docs/IMPLEMENTATION_STATUS.md`.

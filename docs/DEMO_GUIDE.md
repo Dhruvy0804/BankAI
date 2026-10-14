@@ -30,5 +30,22 @@ roundtrips safely in isolated schemas. Do not downgrade the demo database.
 
 Confirmed demo operations persist; repeated seeding does not undo them.
 Use the isolated integration tests for repeatable fresh-state scenarios.
-The frontend still shows infrastructure status; browser login/dashboard
-pages arrive in Phase 4. Agents, voice and evaluation remain later work.
+## Phase 4 web walkthrough
+
+1. Start the database/backend and frontend using README instructions.
+2. Open http://localhost:5173 and use the Local demo credentials disclosure.
+3. Sign in as Demo Asha. View backend-fetched balances, activity and KYC.
+4. Open Accounts and refresh the selected account's balance.
+5. Open Transactions; filter by debit, date, amount or account and page results.
+   Search applies only to the visible page and is labelled accordingly.
+6. Open Cards, request a block, and cancel first to show no status change.
+   Request again and confirm to update the demo card.
+7. Open Loans, calculate EMI with fictional inputs, check demo eligibility,
+   request an application and explicitly confirm the server-returned details.
+8. Create a fictional support ticket and open its details in Support history.
+9. Refresh to demonstrate session restoration; sign out and sign in as Demo
+   Ravi to show customer-specific data. Do not share bearer tokens.
+
+Confirmed operations persist in the demo database. For a repeatable walkthrough
+without changing demo records, use the disposable browser smoke test described
+in TESTING.md. Agents, voice and evaluation remain later work.

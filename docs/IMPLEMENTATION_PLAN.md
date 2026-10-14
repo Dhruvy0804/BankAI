@@ -1,11 +1,11 @@
 # BankAI implementation plan for review
 
 **Status:** Implementation authorized; proceeding through verified phases.
-**Updated:** 2026-10-13.
-**Specification:** `../BankAI_Codex_Implementation_Plan.md`.
+**Updated:** 2026-10-14.
+**Specification:** `../BankAI_Implementation_Plan.md`.
 
-**Current checkpoint:** Phase 3 authentication and BankSim APIs implemented.
-Next: Phase 4 banking frontend. See `IMPLEMENTATION_STATUS.md` for verification evidence.
+**Current checkpoint:** Phases 0–4 complete. Next: Phase 5 text chat and
+LLM provider interface. See `IMPLEMENTATION_STATUS.md` for verification evidence.
 
 ## 1. Agreed scope and current state
 
