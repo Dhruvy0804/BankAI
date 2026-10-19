@@ -26,6 +26,27 @@ class Settings(BaseSettings):
     llm_model: str = Field(default="", max_length=120)
     llm_timeout_seconds: int = Field(default=30, ge=5, le=45)
     llm_max_output_tokens: int = Field(default=1024, ge=256, le=4096)
+    chat_mode: Literal["guidance", "agents"] = "guidance"
+    agent_base_url: str = "http://127.0.0.1:8000"
+    agent_timeout_seconds: int = Field(default=150, ge=30, le=180)
+
+    @field_validator("agent_base_url")
+    @classmethod
+    def internal_endpoint(cls, value):
+        from urllib.parse import urlsplit
+
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "http"
+            or parsed.hostname not in ("127.0.0.1", "localhost", "backend")
+            or parsed.username
+            or parsed.password
+            or parsed.path not in ("", "/")
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("AGENT_BASE_URL must be the local/internal backend origin")
+        return value.rstrip("/")
 
     @property
     def llm_configured(self) -> bool:

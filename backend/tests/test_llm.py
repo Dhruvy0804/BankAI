@@ -124,3 +124,35 @@ def test_missing_configuration_never_opens_client(monkeypatch):
     with pytest.raises(APIError) as failure:
         GeminiProvider(Settings(_env_file=None)).generate([("user", "Hello")])
     assert failure.value.code == "LLM_NOT_CONFIGURED"
+
+
+def test_crewai_adapter_preserves_stop_sequences_usage_and_secret_privacy(monkeypatch):
+    from app.agents.specialists import MonitoredGemini
+
+    class Board:
+        reserved = False
+        recorded = False
+
+        def reserve(self, role, kind):
+            assert role == "account" and kind == "model"
+            self.reserved = True
+
+        def usage(self, role, usage):
+            assert role == "account" and usage.total_token_count == 30
+            self.recorded = True
+
+    def handler(request):
+        body = json.loads(request.content)
+        assert body["generationConfig"]["stopSequences"] == ["\nObservation:"]
+        assert "tools" not in body
+        return httpx.Response(
+            200, json=provider_json('Final Answer: {"status":"answered","answer":"OK"}')
+        )
+
+    install_transport(monkeypatch, handler)
+    board = Board()
+    model = MonitoredGemini(configured(), board, "account")
+    model.stop_sequences = ["\nObservation:"]
+    assert "Final Answer" in model.call([{"role": "user", "content": "Read accounts"}])
+    assert board.reserved and board.recorded
+    assert "test-secret-not-real" not in model.model_dump_json()

@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+from threading import BoundedSemaphore
 from typing import Literal
 from uuid import uuid4
 
@@ -64,7 +65,12 @@ def create_app(
             logging.getLogger("bankai").warning(
                 "Authentication disabled: configure APP_SECRET_KEY."
             )
-        yield
+        protocol_tools = getattr(app.state, "protocol_tools", None)
+        if protocol_tools:
+            async with protocol_tools.session_manager.run():
+                yield
+        else:
+            yield
         engine.dispose()
 
     app = FastAPI(
@@ -76,8 +82,15 @@ def create_app(
     app.state.settings = config
     app.state.session_factory = session_factory or sessionmaker(engine, expire_on_commit=False)
     app.state.login_limiter = LoginLimiter()
-    app.state.chat_limiter = LoginLimiter(attempts=10, message="Too many chat requests. Try again later.")
+    app.state.chat_limiter = LoginLimiter(
+        attempts=10, message="Too many chat requests. Try again later."
+    )
     app.state.llm_provider = GeminiProvider(config)
+    app.state.agent_slots = BoundedSemaphore(2)
+    if config.chat_mode == "agents":
+        from app.agents.protocols import mount_protocols
+
+        app.state.protocol_tools = mount_protocols(app, config, app.state.session_factory)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.allowed_origins,

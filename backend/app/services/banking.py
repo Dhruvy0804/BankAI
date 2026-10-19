@@ -188,7 +188,9 @@ class BankingService:
                 "cards",
                 identifier,
             )
-        return self.new_action("block_card", identifier)
+        return self.new_action(
+            "block_card", identifier, {"masked_card_number": card.masked_card_number}
+        )
 
     def confirmable(self, identifier, kind, resource_id=None):
         # Lock actor before action for a consistent order and fresh active-state check.

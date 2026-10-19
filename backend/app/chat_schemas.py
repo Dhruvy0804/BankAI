@@ -4,7 +4,8 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
-from app.schemas import Input, Output
+from app.agents.contracts import ToolFact
+from app.schemas import Input, Output, PendingOut
 
 
 class ChatInput(Input):
@@ -21,7 +22,9 @@ class ChatInput(Input):
 
 
 class Guidance(Input):
-    status: Literal["guidance", "needs_tools", "refused"]
+    status: Literal[
+        "guidance", "needs_tools", "refused", "answered", "clarification", "confirmation_required"
+    ]
     answer: str = Field(min_length=1, max_length=4000)
 
 
@@ -32,12 +35,15 @@ class ChatReply(Guidance):
     run_id: UUID
     provider: Literal["gemini"]
     model: str
-    prompt_version: Literal["phase5-guidance-v1"] = "phase5-guidance-v1"
+    prompt_version: Literal["phase5-guidance-v1", "phase6-blackboard-v1"] = "phase5-guidance-v1"
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
     duration_ms: int = Field(ge=0)
-    banking_actions_enabled: Literal[False] = False
+    banking_actions_enabled: bool = False
+    data: list[ToolFact] = Field(default_factory=list, max_length=16)
+    artifact_ids: list[UUID] = Field(default_factory=list, max_length=4)
+    pending_actions: list[PendingOut] = Field(default_factory=list, max_length=16)
     sources: list[str] = Field(default_factory=list, max_length=0)
     simulated: Literal[True] = True
 
@@ -63,4 +69,6 @@ class ChatStatus(Output):
     configured: bool
     provider: str
     model: str
-    banking_actions_enabled: Literal[False] = False
+    banking_actions_enabled: bool = False
+    mode: Literal["guidance", "agents"] = "guidance"
+    configured_agent_count: Literal[0, 5] = 0

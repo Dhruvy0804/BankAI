@@ -1,11 +1,11 @@
 import { useRef, useState, type FormEvent } from "react";
-import { type Api, dateTime, useAction, useResource } from "./api";
-import { ErrorNotice, ResourceState } from "./components";
+import { type Api, type Pending, dateTime, money, label, useAction, useResource } from "./api";
+import { Confirmation, ErrorNotice, ResourceState } from "./components";
 
-type Status = { configured: boolean; provider: string; model: string };
+type Status = { configured: boolean; provider: string; model: string; mode?: "guidance" | "agents" };
 type Conversation = { id: string; title: string; created_at: string };
 type Reply = {
-  status: "guidance" | "needs_tools" | "refused";
+  status: "guidance" | "needs_tools" | "refused" | "answered" | "clarification" | "confirmation_required";
   answer: string;
   request_id: string;
   run_id: string;
@@ -15,6 +15,8 @@ type Reply = {
   input_tokens: number | null;
   output_tokens: number | null;
   total_tokens: number | null;
+  pending_actions?: Pending[];
+  prompt_version?: string;
 };
 type Detail = Conversation & {
   turns: { message_id: string; user_text: string; response: Reply; created_at: string }[];
@@ -32,8 +34,9 @@ export default function Chat({ api }: { api: Api }) {
     <section className="panel chat-panel">
       <h2>Text assistant</h2>
       <p className="muted">
-        Ask for general banking explanations. This chat cannot look up accounts,
-        verify policies, or perform banking actions yet. Use the banking pages for those tasks.
+        {status.data?.mode === "agents"
+          ? "Ask about your fictional accounts, cards, or demo loan calculations. Sensitive requests require a separate confirmation. Verified policy answers are coming later. "
+          : "Ask for general banking explanations. This chat cannot look up accounts, verify policies, or perform banking actions yet. Use the banking pages for those tasks. "}
         Do not enter passwords, PINs, OTPs, or real banking information.
       </p>
       <ResourceState {...status}>
@@ -45,6 +48,7 @@ export default function Chat({ api }: { api: Api }) {
           </p>
         )}
       </ResourceState>
+      {status.data?.mode === "agents" && <p className="muted">Five-agent assistant · Facts are retrieved from BankSim. Preparing a request does not execute it.</p>}
       <div className="form-actions">
         <button className="primary" disabled={busy || create.busy} onClick={() => void create.run(async () => {
           const conversation = await api<Conversation>("/chat/conversations", {});
@@ -118,6 +122,8 @@ function ConversationChat({ api, id, configured, setBusy, changed }: {
               <p className="muted">Request: {turn.response.request_id}</p>
               <pre className="chat-json">{JSON.stringify(turn.response, null, 2)}</pre>
             </details>
+            {turn.response.prompt_version === "phase6-blackboard-v1" && <RunActivity api={api} runId={turn.response.run_id} />}
+            {turn.response.pending_actions?.map((pending) => <PendingChatAction key={pending.id} api={api} pending={pending} />)}
           </article>)}
         </div>
       </ResourceState>
@@ -138,4 +144,61 @@ function ConversationChat({ api, id, configured, setBusy, changed }: {
       </form>
     </>
   );
+}
+
+function RunActivity({ api, runId }: { api: Api; runId: string }) {
+  const [open, setOpen] = useState(false);
+  return <details onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary>Agent activity and shared context</summary>
+    {open && <RunTrace api={api} runId={runId} />}
+  </details>;
+}
+
+function RunTrace({ api, runId }: { api: Api; runId: string }) {
+  const trace = useResource<{
+    status: string; model_calls: number; tool_calls: number;
+    configured_roles: Record<string, string>;
+    events: { id: string; at: string; role: string; kind: string; metadata: unknown }[];
+    artifacts: unknown[];
+  }>(api, `/chat/runs/${runId}`);
+  return <ResourceState {...trace}>
+    {trace.data && <>
+      <p>{trace.data.status} · {trace.data.model_calls} model calls · {trace.data.tool_calls} tool calls</p>
+      <p className="muted">{Object.entries(trace.data.configured_roles).map(([role, framework]) => `${role}: ${framework}`).join(" · ")}</p>
+      <ol className="agent-timeline" tabIndex={0} aria-label="Agent execution timeline">{trace.data.events.map((event) => <li key={event.id}>
+        <strong>{event.role}</strong> · {event.kind.replaceAll("_", " ")}
+        <details><summary>Event details</summary><pre className="chat-json">{JSON.stringify(event.metadata, null, 2)}</pre></details>
+      </li>)}</ol>
+      <details><summary>Blackboard artifacts</summary><pre className="chat-json">{JSON.stringify(trace.data.artifacts, null, 2)}</pre></details>
+    </>}
+  </ResourceState>;
+}
+
+function PendingChatAction({ api, pending }: { api: Api; pending: Pending }) {
+  const [open, setOpen] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  return <div className="notice">
+    <p>{confirmed ? "The simulated action was confirmed." : `Pending ${pending.kind.replaceAll("_", " ")} · expires ${dateTime(pending.expires_at)}`}</p>
+    {!confirmed && <button type="button" className="secondary" onClick={() => setOpen(true)}>Review action</button>}
+    {open && <Confirmation pending={pending} title="Review this simulated banking action"
+      close={() => setOpen(false)} confirm={async () => {
+        if (pending.kind === "block_card" && pending.resource_id) {
+          await api(`/cards/${pending.resource_id}/block/confirm`, { action_id: pending.id, confirmation: true });
+        } else if (pending.kind === "loan_application") {
+          await api(`/loans/applications/${pending.id}/confirm`, { confirmation: true });
+        } else {
+          throw new Error("Unsupported pending action. Use the banking pages to review it.");
+        }
+        setConfirmed(true);
+        setOpen(false);
+      }}>
+      <p>This changes fictional BankSim records only. Confirm the exact details below.</p>
+      {pending.kind === "block_card" ? <p>Block card <strong>{String(pending.payload.masked_card_number || pending.resource_id)}</strong>.</p> : <>
+        <p>{label(String(pending.payload.loan_type))} loan · <strong>{money(String(pending.payload.requested_amount))}</strong></p>
+        <p>{String(pending.payload.tenure_months)} months at {String(pending.payload.annual_interest_rate)}% annual interest.</p>
+        <p>Demo monthly income: {money(String(pending.payload.monthly_income))}; obligations: {money(String(pending.payload.monthly_obligations))}.</p>
+        <p>This submits a simulated application, not a credit approval.</p>
+      </>}
+    </Confirmation>}
+  </div>;
 }

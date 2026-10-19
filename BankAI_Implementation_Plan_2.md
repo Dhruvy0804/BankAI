@@ -5,7 +5,7 @@
 **Main system:** Five agents in total, including the supervisor.
 **Evaluation configurations:** Two, three, and five agents in total.
 **Frameworks:** Google ADK and CrewAI only.
-**Status:** Planning document. The new integrations described below are not yet implemented or verified.
+**Status:** Phases 0–6 implemented locally; later phases remain planned. See [implementation status](docs/IMPLEMENTATION_STATUS.md) for verification evidence and limitations.
 
 ## 1. Relationship to the original plan
 
@@ -34,6 +34,8 @@ Retain:
 - Fictional customers and transactions only. No real banking integration or real financial operations.
 
 Repository status at preparation: Phases 0–4 are recorded as complete; Phases 5 onward are not started. Recheck the repository and test results before implementation.
+
+Current checkpoint: Phase 5 and Phase 6A–6C have since been implemented and locally verified, including a live five-role ADK/CrewAI workflow over A2A and MCP. Phase 7 (RAG) is next; evaluation comparisons and cloud deployment remain later work.
 
 ## 3. Professor's requirements and acceptance evidence
 

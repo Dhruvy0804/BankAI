@@ -6,11 +6,13 @@ from uuid import UUID
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    Identity,
     Index,
     Integer,
     Numeric,
@@ -246,3 +248,45 @@ class ChatTurn(IdentityMixin, CreatedMixin, Base):
     position: Mapped[int] = mapped_column(Integer)
     user_text: Mapped[str] = mapped_column(Text)
     response: Mapped[dict] = mapped_column(JSONB)
+
+
+class AgentRun(IdentityMixin, CreatedMixin, Base):
+    __tablename__ = "agent_runs"
+    __table_args__ = (
+        CheckConstraint("status IN ('running', 'completed', 'failed', 'cancelled')", name="status"),
+        CheckConstraint("revision >= 0 AND model_calls >= 0 AND tool_calls >= 0", name="counters"),
+    )
+    customer_id: Mapped[UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    conversation_id: Mapped[UUID] = mapped_column(ForeignKey("conversations.id"), index=True)
+    request_id: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(12), default="running")
+    revision: Mapped[int] = mapped_column(Integer, default=0)
+    model_calls: Mapped[int] = mapped_column(Integer, default=0)
+    tool_calls: Mapped[int] = mapped_column(Integer, default=0)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    usage_complete: Mapped[bool] = mapped_column(Boolean, default=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AgentArtifact(IdentityMixin, CreatedMixin, Base):
+    __tablename__ = "agent_artifacts"
+    __table_args__ = (
+        UniqueConstraint("run_id", "revision", name="uq_agent_artifact_revision"),
+        UniqueConstraint("run_id", "role", name="uq_agent_artifact_role"),
+    )
+    run_id: Mapped[UUID] = mapped_column(ForeignKey("agent_runs.id"), index=True)
+    role: Mapped[str] = mapped_column(String(16))
+    revision: Mapped[int] = mapped_column(Integer)
+    payload: Mapped[dict] = mapped_column(JSONB)
+
+
+class AgentEvent(IdentityMixin, CreatedMixin, Base):
+    __tablename__ = "agent_events"
+    sequence: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True)
+    run_id: Mapped[UUID] = mapped_column(ForeignKey("agent_runs.id"), index=True)
+    role: Mapped[str] = mapped_column(String(16))
+    kind: Mapped[str] = mapped_column(String(40))
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict)

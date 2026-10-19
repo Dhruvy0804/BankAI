@@ -150,3 +150,69 @@ frontend results above precede this narrow follow-up; unchanged UI tests/build
 were not repeated. MockTransport alone cannot verify live API compatibility.
 The live smoke samples do not establish broad answer accuracy, prompt-injection
 resistance, provider uptime, or invoiced charges; those evaluations remain later work.
+
+## Plan 2 Phase 6 verification
+
+Final checks: **85 backend tests passed**, with two opt-in tests skipped by
+default; **16 frontend tests passed**, and the TypeScript/production build passed.
+The opt-in live-provider and Edge checks were run separately and passed. Ruff,
+pip check, migration consistency/roundtrip and the rebuilt Docker application
+also passed. Mobile screenshots were visually inspected.
+
+Run the normal full-database backend suite and frontend tests/build as above.
+Phase 6 uses disposable PostgreSQL schemas and independent connections. Protocol
+integration tests launch a loopback Uvicorn server and run actual ADK and CrewAI
+agents over official A2A/MCP transports; only external model responses are mocked
+in the default suite. No runtime mock provider option is exposed to users.
+
+Checks cover typed tool arguments/results (including a malformed raw MCP request),
+ownership and role restrictions, scoped task lookup, Blackboard revision conflicts
+and consumer IDs, bounded budgets/concurrency, expiry/cancellation, completed-run
+message replay, tool receipt reuse, protected card/loan confirmation, support
+ticket creation, existing loans, and recent transactions. The custom CrewAI SDK
+adapter also tests stop-sequence serialization, usage callbacks and key exclusion
+from model serialization. Stable event sequence ordering is asserted even when
+database timestamps tie. The migration test round-trips through `0005` and compares
+the ORM metadata with the actual database schema.
+
+Explicit real-provider acceptance (charges/quota may apply):
+
+```powershell
+cd backend
+$env:BANKAI_RUN_DB_TESTS='1'
+$env:BANKAI_LIVE_AGENT_TESTS='1'
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_agents.py::test_live_five_roles -q
+```
+
+This test creates a disposable schema, uses the configured local Gemini model,
+invokes all four specialists through ADK/A2A, checks actual tool facts and shared
+context, and writes a local ignored evidence report. Do not enable it in ordinary
+CI runs. The successful sample used 12 model calls, three tool executions and
+22,493 tokens; it is acceptance evidence, not the 2/3/5-agent benchmark.
+
+Optional browser QA with the existing ignored Playwright installation:
+
+```powershell
+# From the project root; .qa-tools Playwright and Edge must already be installed.
+$env:BANKAI_RUN_DB_TESTS='1'
+$env:BANKAI_BROWSER_AGENT_TESTS='1'
+$env:PYTHONPATH=(Resolve-Path '.qa-tools').Path
+cd backend
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_agents.py::test_agent_chat_browser -q
+```
+
+The browser test starts an isolated Vite server pointed at the disposable API,
+uses real frameworks/protocols with test-only model responses, and makes no paid
+model calls. It verifies trace expansion, confirmation details, cancel versus
+confirm, actual card state, desktop/mobile layout and absence of browser errors.
+Screenshots are local ignored artifacts. The original banking browser smoke also
+passed after the framework dependency changes.
+
+The live Docker smoke separately verifies actual provider calls through the
+frontend proxy, ownership-scoped account facts, the EMI calculator, saved history,
+replay deduplication, typed finalization, and ordered trace events. Its JSON
+evidence stays in ignored `.artifacts/phase6-docker-live.json` without credentials.
+Local configuration is not a provider-health guarantee; key expiry/quota changes
+must produce safe errors. Non-failing upstream annotation/deprecation warnings
+are retained rather than hidden. RAG grounding, prompt/architecture comparisons,
+load/cost benchmarks and cloud/phone acceptance remain later phases.

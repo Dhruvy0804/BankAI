@@ -6,13 +6,14 @@ variants: **2, 3, and 5 total agents**, using the same banking capabilities.
 
 ## Current checkpoint
 
-Phases 0–4: a working local banking web application with JWT login,
+Phases 0–6: a working local banking web application with JWT login,
 dashboard, accounts, filtered transactions, cards, demo loans and support.
 It uses the seeded PostgreSQL records and confirmed banking APIs.
 Plan 2 Phase 5 now adds authenticated text chat, saved conversations, and a
 direct Gemini SDK adapter with Pydantic responses. Live model verification passed
-with the configured local provider. Agent orchestration, voice and evaluation execution
-are later phases. Active implementation follows
+with the configured local provider. Phase 6 adds an ADK supervisor, four CrewAI
+specialists, A2A, MCP tools and a shared PostgreSQL Blackboard. Voice and evaluation
+execution remain later phases. Active implementation follows
 [Implementation Plan 2](BankAI_Implementation_Plan_2.md); the original plans are preserved.
 Phase 8 includes browser voice and actual outbound phone testing: the owner
 starts an approved call and the professor/recipient speaks with BankAI on
@@ -49,9 +50,9 @@ do not enter real credentials or personal information. History is stored in the
 local database and isolated by customer. The list pages through 50 conversations
 at a time, with at most 100 exchanges per conversation and 2,000 characters per question.
 
-This phase provides general AI-generated guidance only. It has no account tools,
-verified policy sources, or banking-action capability. Use the existing banking
-pages for those tasks. CrewAI/ADK, A2A, MCP, and shared Blackboard start in Phase 6.
+In `CHAT_MODE=guidance`, the Phase 5 flow provides general AI-generated guidance
+only, without account tools or banking actions. `CHAT_MODE=agents` enables the
+Phase 6 workflow below. Verified policy retrieval remains Phase 7.
 Missing configuration produces a visible unavailable state and API 503; it never
 silently returns a fake AI answer. Configured status checks the settings, not
 provider reachability or available credit.
@@ -70,7 +71,93 @@ limited to ten new requests per minute per customer per API process. This local
 throttle is not a distributed deployment quota. Failed generations are not added
 to chat context; sanitized failure audit records retain the request ID. Replies
 save model/prompt version, run ID, duration, and provider-reported tokens, with
-missing usage marked unavailable. Cost reporting and full tracing arrive later.
+missing usage marked unavailable. Phase 6 adds agent tracing; cost comparisons
+remain later work.
+
+## Five-agent chat (Plan 2 Phase 6)
+
+The main system has exactly five configured roles:
+
+| Role | Framework | MCP banking capabilities |
+|---|---|---|
+| Supervisor | Google ADK | Routing, delegation and typed finalization; no direct banking permissions |
+| Account | CrewAI | Accounts/KYC and recent transactions |
+| Card | CrewAI | Card snapshot and a pending block request |
+| Loan | CrewAI | Existing loans, EMI, demo eligibility and a pending application |
+| Policy/Support | CrewAI | Ticket lookup/creation, general explanations and summaries |
+
+Only relevant agents run for each question. All five participated in the live
+multi-part acceptance workflow; configured roles and model-call counts are
+different metrics. Automatic manager/planner/reasoning agents, specialist
+delegation, memory and vendor tracing are disabled. No third agentic framework
+is used.
+
+```mermaid
+flowchart LR
+    UI[Authenticated chat] --> ADK[ADK Supervisor]
+    ADK -->|A2A HTTP| Crew[Four CrewAI specialist roles]
+    Crew -->|MCP HTTP| Tools[Scoped banking tools]
+    Tools --> Bank[Existing BankSim service]
+    Crew <-->|Typed artifacts and revisions| Board[(PostgreSQL Blackboard)]
+    ADK <-->|Artifact references| Board
+```
+
+Enable the workflow in the ignored root `.env`:
+
+```dotenv
+CHAT_MODE=agents
+AGENT_BASE_URL=http://127.0.0.1:8000
+AGENT_TIMEOUT_SECONDS=150
+```
+
+Keep the backend-only model configuration, install the updated dependencies,
+apply `alembic upgrade head`, then rebuild/restart. The current local application
+is enabled in agent mode. Set `CHAT_MODE=guidance` and restart/recreate the backend
+to use Phase 5 without delegation. Historical messages remain readable.
+
+Try: “Read my balances and KYC, list my cards, calculate an EMI for INR 12000 at
+12% annual interest for 12 months, and summarize the results.” Account artifacts
+can feed Loan, and Support can consume specialist outputs. Open **Agent activity
+and shared context** to inspect ordered callbacks, protocol events and Blackboard
+artifacts. **Response details** shows validated JSON facts, provenance IDs,
+model/prompt version, duration and usage.
+
+Card blocking and loan applications produce pending actions. Select **Review
+action**, check the server-bound details, then use **Confirm action**. Chat text
+such as “yes” cannot confirm an action. Cancelling the dialog leaves the bank
+record unchanged. Support tickets can be created when explicitly requested.
+There is no verified policy corpus until Phase 7.
+
+A2A Agent Cards/endpoints under `/internal/a2a/{role}/` and MCP `/internal/mcp/`
+require short-lived customer/run/role-bound grants. Customer JWTs cannot call
+them directly. Tools reuse existing ownership checks and banking services. Agent
+Cards must match the allowed internal endpoint. `GET /api/v1/chat/runs/{id}` and
+`POST /api/v1/chat/runs/{id}/cancel` require ownership. Cancellation blocks future
+tool/state access; an already running external request may still finish and incur
+usage. PostgreSQL keeps durable evidence; transient A2A tasks are grant-scoped,
+expire, and are capped at 1,000 per specialist endpoint.
+
+Limits: 20 model calls, 16 unique successful tool executions, a 150-second default
+deadline, two concurrent workflows per API process, and one specialist-output
+repair. Matching tool calls within a run reuse receipts; completed specialist
+delegations reuse artifacts. Confirmation replay remains protected by the banking
+service. Failed runs may leave unconfirmed pending requests that expire normally;
+automatic durable recovery and exactly-once provider billing are not implemented.
+
+Tested versions: Google ADK 2.12.0, CrewAI 1.15.28, A2A SDK 0.3.26, MCP 1.28.1,
+and Google Gen AI SDK 2.31.0. CrewAI's supported `BaseLLM` adapter reuses the shared
+Google SDK instead of its incompatible optional provider-extra pin. The ADK agent
+uses the official A2A client through its delegation tool; protocol adapters and
+the typed finalization tool are not extra agents. FastAPI, Pydantic and tracing
+dependency pins were resolved together and regression tested. Framework `.env`
+auto-loading and vendor telemetry are disabled; Pydantic Settings owns
+configuration, while application callbacks store redacted events in PostgreSQL.
+Docker caches dependencies separately from source edits.
+
+Prompt checks are heuristic and do not replace authorization, schema validation
+or confirmation. Broader adversarial/performance comparisons, 2/3-agent variants,
+alternate architectures/prompts, voice/phone calls, distributed quotas and cloud
+hardening remain later Plan 2 phases. See [testing](docs/TESTING.md).
 
 ## Prerequisites
 

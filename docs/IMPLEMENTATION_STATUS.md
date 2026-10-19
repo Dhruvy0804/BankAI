@@ -11,11 +11,102 @@ Original implementation-plan documents remain preserved; phased delivery.
 | 3: Authentication and BankSim APIs | Complete; 57 tests and live Docker API checks passed |
 | 4: Banking dashboard | Complete; 12 UI tests, build and Edge desktop/mobile flows passed |
 | 5: LLM adapter and text chat | Complete; local tests, live Gemini conversation, saved history, and browser checks passed |
-| 6: Main five-agent system | Not started |
+| 6A: Frameworks, A2A and shared state | Complete; real ADK/CrewAI interoperability and ownership/revision tests passed |
+| 6B: MCP banking tools | Complete; 10 scoped tools, real protocol calls and validation checks passed |
+| 6C: Main five-agent system | Complete locally; live five-role workflow, protected actions, callbacks, trace UI and Docker verified |
 | 7: RAG | Not started |
 | 8A: Browser voice; 8B: actual outbound telephone calling | Not started |
 | 9A–9C: Evaluation engine, web dashboard and benchmark | Not started |
 | 10: Final deployment/demo verification | Not started |
+
+## Plan 2 Phase 6: ADK/CrewAI banking agents
+
+Implemented on branch `plan2-phase6`. The original plan files remain unchanged.
+Phase 6 is included in this Git checkpoint. Current next phase: **7, RAG**.
+
+The main configuration has one Google ADK supervisor and four CrewAI specialists:
+Account, Card, Loan, and Policy/Support. No hidden manager/planner/reviewer agents
+or other agentic frameworks are used. Specialist roles execute only when needed.
+An ADK delegation tool uses the official A2A client to consume authenticated Agent
+Cards and JSON-RPC task/artifact exchanges with CrewAI executors over real HTTP.
+The typed finalization tool validates `SupervisorAnswer` and ends summarization;
+protocol adapters and tools are not extra agents.
+
+Ten MCP tools reuse BankSim's ownership-scoped service: account/KYC lookup,
+recent transactions, card lookup, pending card block, loan lookup, EMI, eligibility,
+pending loan application, support ticket lookup and explicit ticket creation.
+Tool arguments/results use Pydantic. Sensitive tools only prepare actions;
+confirmation uses the existing exact-parameter, expiry/replay-protected APIs.
+Card confirmations now include the server-derived masked number in their payload.
+
+Migrations `0004` and `0005` add PostgreSQL run/artifact/event records and a stable
+event sequence. The local database is at `0005`. Blackboard writes check revisions,
+consumers record exact artifact IDs/revisions, and identity is server-established.
+Service grants are short-lived and bound to customer, run and specialist role;
+normal customer JWTs cannot access protocol endpoints. Protocol task lookup is
+also grant-scoped and bounded, preventing cross-user/run/role task retrieval.
+
+Callbacks record agent/model/tool flow, validation failures, errors, retries,
+artifact publication/consumption, model usage and framework/prompt versions.
+Prompts, credentials and private reasoning are not written to application events.
+Tool facts come from authenticated service results, never model-supplied data.
+Each run allows 20 model calls and 16 successful tool executions, with a default
+150-second deadline and two concurrent workflows per API process. Cancellation
+revokes subsequent tool/state access. Identical tool requests reuse run receipts;
+completed specialists return their existing artifact on delegation replay.
+
+The chat page now exposes an accessible, bounded event timeline and Blackboard
+artifacts. Pending actions open a separate review dialog with meaningful banking
+details; cancelling changes nothing, while confirming calls the protected API.
+The local ignored `.env` has `CHAT_MODE=agents`; `guidance` preserves Phase 5 mode.
+
+Dependency versions tested together: Google ADK 2.12.0, CrewAI 1.15.28, A2A SDK
+0.3.26, MCP 1.28.1, Google Gen AI SDK 2.31.0, FastAPI 0.141.1, Pydantic 2.12.5
+and OpenTelemetry 1.42.1. CrewAI uses its supported custom `BaseLLM` adapter with
+the shared Google SDK. Optional provider-extra conflicts were avoided without
+introducing another framework. CrewAI import-time dotenv loading and vendor
+telemetry are disabled: Pydantic Settings owns configuration, and traces stay
+local. Docker caches the dependency layer separately from source code.
+
+Verification evidence:
+
+- The previous 74-test backend suite continued to pass after dependency changes.
+  The expanded suite covers both real frameworks over HTTP with model responses
+  mocked, MCP ownership/types/permissions, Blackboard revisions/dependencies,
+  task-store isolation, expiry/cancellation, budgets/capacity, protected card/loan
+  confirmation, transaction/loan/support tools, and input guardrails. See
+  `docs/TESTING.md` for final totals and opt-in commands.
+- A live provider workflow invoked **all five roles**, including Account -> Loan
+  -> Support artifact consumption. It made 12 model calls and three MCP tool
+  executions, recorded 22,493 provider tokens and 82 events, and returned account,
+  card and EMI facts matching BankSim. This is one acceptance sample, not a
+  comparative benchmark. Evidence: ignored `.artifacts/phase6-live.json`.
+- A live Docker request used ADK -> A2A -> CrewAI -> MCP for Account and Loan,
+  verified balances against the banking API, calculated EMI **INR 1,066.19**, saved
+  history and reused the same response on retry. Ordered events and typed final
+  output were verified. Evidence: ignored `.artifacts/phase6-docker-live.json`.
+- Edge desktop/mobile exercised real authenticated APIs with test-only model
+  responses: shared context/timeline, review/cancel without mutation, and explicit
+  card confirmation all passed. Screenshots are in ignored
+  `.artifacts/phase6-chat-*.png`. The existing banking browser smoke also passed.
+- The frontend's 16 tests and production build passed. Ruff, dependency checks,
+  migration/model consistency and Docker build/start passed.
+- Final full backend suite: **85 passed, 2 opt-in tests skipped**. The real-provider
+  and Edge tests were run separately and passed; they are deliberately skipped in
+  the default suite to avoid paid calls and optional-browser dependencies.
+
+Live checks identified two integration issues that were fixed: an Account answer
+without tool evidence now fails its output guardrail, and supervisor finalization
+uses a typed tool instead of relying solely on final-text JSON formatting. An
+environment-isolation regression from framework dotenv auto-loading was also
+fixed. Upstream MCP/CrewAI/A2A deprecation/annotation warnings remain non-failing.
+
+Limits: input injection/abuse checks are heuristic, not a claim of exhaustive
+attack prevention. Broad safety/performance/cost comparisons are Phase 9. Some
+failed runs may leave unconfirmed requests that expire; automatic durable recovery
+and exactly-once billing are not implemented. A cancelled external request may
+still consume provider usage. No verified policy corpus, voice, phone calling,
+2/3-agent execution, comparison dashboard, or cloud deployment is claimed here.
 
 ## Plan 2 Phase 5: text-chat foundation
 
@@ -80,8 +171,8 @@ Edge verification reopened the live conversation after refresh, checked all
 three replies, and passed desktop/mobile layout and browser-error checks. Evidence
 is stored locally in ignored `.artifacts/phase5-live-chat.json`,
 `.artifacts/phase5-live-desktop.png`, and `.artifacts/phase5-live-mobile.png`.
-The backend Docker image was rebuilt with the schema fix. Phase 5 is complete;
-Phase 6 has not started. Broader prompt safety evaluation and cloud deployment
+The backend Docker image was rebuilt with the schema fix. At the Phase 5
+checkpoint, Phase 6 had not started. Broader prompt safety evaluation and cloud deployment
 remain later phases. Because the credential was shared in conversation, the user
 should rotate it and update local configuration after testing.
 
@@ -286,12 +377,12 @@ repository. Only project source, documentation, dependency manifests and
 lockfiles are included; environments, caches, build output and `.env`
 files are excluded.
 
-## Next implementation step
+## Historical Phase 4 handoff
 
 Phase 3 was pushed as commit `0033548`. The user requested the Phase 4
 GitHub handoff on 2026-10-14. The renamed specification
 `BankAI_Implementation_Plan.md` is preserved and documentation references it.
 
-Next is Phase 5: configurable LLM adapter and text chat with bounded provider
+At that checkpoint, next was Phase 5: configurable LLM adapter and text chat with bounded provider
 calls and honest configuration/failure reporting. No AI provider calls or
 paid experiments were run during Phase 4.

@@ -16,7 +16,8 @@ from app.chat_schemas import (
     TurnOut,
 )
 from app.core.errors import APIError
-from app.models import AuditLog, ChatTurn, Conversation
+from app.models import AgentArtifact, AgentEvent, AgentRun, AuditLog, ChatTurn, Conversation
+from app.schemas import PendingOut
 
 router = APIRouter(prefix="/api/v1", tags=["Text chat"])
 
@@ -26,7 +27,7 @@ def owned_conversation(db, customer, conversation_id, *, lock=False):
         Conversation.id == conversation_id, Conversation.customer_id == customer.id
     )
     try:
-        obj = db.scalar(query.with_for_update(nowait=True) if lock else query)
+        obj = db.scalar(query.with_for_update(nowait=True, key_share=True) if lock else query)
     except OperationalError as exc:
         if getattr(exc.orig, "sqlstate", None) != "55P03":
             raise
@@ -42,7 +43,12 @@ def owned_conversation(db, customer, conversation_id, *, lock=False):
 def status(request: Request, customer: Actor):
     settings = request.app.state.settings
     return ChatStatus(
-        configured=settings.llm_configured, provider=settings.llm_provider, model=settings.llm_model
+        configured=settings.llm_configured,
+        provider=settings.llm_provider,
+        model=settings.llm_model,
+        mode=settings.chat_mode,
+        configured_agent_count=5 if settings.chat_mode == "agents" else 0,
+        banking_actions_enabled=settings.chat_mode == "agents",
     )
 
 
@@ -119,26 +125,70 @@ def chat(data: ChatInput, request: Request, db: DB, customer: Actor):
     history.append(("user", data.message))
     started = monotonic()
     try:
-        result = request.app.state.llm_provider.generate(history)
+        if request.app.state.settings.chat_mode == "agents":
+            import asyncio
+
+            from app.agents.supervisor import run_supervisor
+
+            if not request.app.state.agent_slots.acquire(blocking=False):
+                raise APIError(429, "AGENT_BUSY", "The agent service is busy. Try again shortly.")
+            try:
+                answer, artifacts, run_id, usage, duration = asyncio.run(
+                    run_supervisor(
+                        request.app.state.settings,
+                        request.app.state.session_factory,
+                        customer.id,
+                        obj.id,
+                        request.state.request_id,
+                        history,
+                    )
+                )
+            finally:
+                request.app.state.agent_slots.release()
+            facts = [fact for artifact in artifacts for fact in artifact.facts]
+            pending = [
+                PendingOut.model_validate(fact.data)
+                for fact in facts
+                if fact.tool in ("prepare_card_block", "prepare_loan_application")
+            ]
+            reply = ChatReply(
+                status="confirmation_required" if pending else answer.status,
+                answer=answer.answer,
+                conversation_id=obj.id,
+                message_id=data.message_id,
+                request_id=request.state.request_id,
+                run_id=run_id,
+                provider="gemini",
+                model=request.app.state.settings.llm_model,
+                prompt_version="phase6-blackboard-v1",
+                duration_ms=duration,
+                banking_actions_enabled=True,
+                data=facts,
+                artifact_ids=[artifact.id for artifact in artifacts],
+                pending_actions=pending,
+                **usage,
+            )
+        else:
+            result = request.app.state.llm_provider.generate(history)
+            reply = ChatReply(
+                **result.guidance.model_dump(),
+                conversation_id=obj.id,
+                message_id=data.message_id,
+                request_id=request.state.request_id,
+                run_id=uuid4(),
+                provider="gemini",
+                model=request.app.state.settings.llm_model,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                total_tokens=result.total_tokens,
+                duration_ms=int((monotonic() - started) * 1000),
+            )
     except APIError as error:
         error.actor = customer.id
         error.action = "chat_failed"
         error.resource_type = "conversations"
         error.resource_id = obj.id
         raise
-    reply = ChatReply(
-        **result.guidance.model_dump(),
-        conversation_id=obj.id,
-        message_id=data.message_id,
-        request_id=request.state.request_id,
-        run_id=uuid4(),
-        provider="gemini",
-        model=request.app.state.settings.llm_model,
-        input_tokens=result.input_tokens,
-        output_tokens=result.output_tokens,
-        total_tokens=result.total_tokens,
-        duration_ms=int((monotonic() - started) * 1000),
-    )
     db.add(
         ChatTurn(
             conversation_id=obj.id,
@@ -162,3 +212,71 @@ def chat(data: ChatInput, request: Request, db: DB, customer: Actor):
     )
     db.flush()
     return reply
+
+
+@router.get("/chat/runs/{run_id}")
+def run_trace(run_id: UUID, db: DB, customer: Actor):
+    run = db.scalar(
+        select(AgentRun).where(AgentRun.id == run_id, AgentRun.customer_id == customer.id)
+    )
+    if run is None:
+        raise APIError(404, "NOT_FOUND", "Agent run not found.")
+    return {
+        "run_id": run.id,
+        "request_id": run.request_id,
+        "status": run.status,
+        "configured_roles": {
+            "supervisor": "Google ADK",
+            "account": "CrewAI",
+            "card": "CrewAI",
+            "loan": "CrewAI",
+            "support": "CrewAI",
+        },
+        "model": run.model,
+        "revision": run.revision,
+        "model_calls": run.model_calls,
+        "tool_calls": run.tool_calls,
+        "total_tokens": run.total_tokens if run.usage_complete else None,
+        "artifacts": [
+            row.payload
+            for row in db.scalars(
+                select(AgentArtifact)
+                .where(AgentArtifact.run_id == run.id)
+                .order_by(AgentArtifact.revision)
+            )
+        ],
+        "events": [
+            {
+                "id": row.id,
+                "sequence": row.sequence,
+                "at": row.created_at,
+                "role": row.role,
+                "kind": row.kind,
+                "metadata": row.payload,
+            }
+            for row in db.scalars(
+                select(AgentEvent)
+                .where(AgentEvent.run_id == run.id)
+                .order_by(AgentEvent.sequence)
+                .limit(500)
+            )
+        ],
+    }
+
+
+@router.post("/chat/runs/{run_id}/cancel")
+def cancel_run(run_id: UUID, db: DB, customer: Actor):
+    run = db.scalar(
+        select(AgentRun)
+        .where(
+            AgentRun.id == run_id,
+            AgentRun.customer_id == customer.id,
+        )
+        .with_for_update()
+    )
+    if run is None:
+        raise APIError(404, "NOT_FOUND", "Agent run not found.")
+    if run.status == "running":
+        run.status = "cancelled"
+        db.add(AgentEvent(run_id=run.id, role="supervisor", kind="cancel_requested", payload={}))
+    return {"run_id": run.id, "status": run.status}
