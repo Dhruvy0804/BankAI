@@ -14,10 +14,12 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from starlette.exceptions import HTTPException
 
+from app.api.chat import router as chat_router
 from app.api.routes import router
 from app.core.config import Settings
 from app.core.errors import APIError
 from app.core.security import LoginLimiter
+from app.services.llm import GeminiProvider
 
 
 class HealthResponse(BaseModel):
@@ -74,6 +76,8 @@ def create_app(
     app.state.settings = config
     app.state.session_factory = session_factory or sessionmaker(engine, expire_on_commit=False)
     app.state.login_limiter = LoginLimiter()
+    app.state.chat_limiter = LoginLimiter(attempts=10, message="Too many chat requests. Try again later.")
+    app.state.llm_provider = GeminiProvider(config)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.allowed_origins,
@@ -137,6 +141,7 @@ def create_app(
         )
 
     app.include_router(router)
+    app.include_router(chat_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["Infrastructure"])
     def health():

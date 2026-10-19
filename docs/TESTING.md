@@ -110,3 +110,43 @@ support, customer switching, 401 clearing and no page overflow/errors.
 Screenshots were visually inspected. Safari, Firefox and physical-phone
 testing have not been performed. Browser channel setup follows the
 [official Playwright documentation](https://playwright.dev/python/docs/browsers).
+
+## Plan 2 Phase 5 verification
+
+Run the existing backend/full-database and frontend commands above. On 2026-10-20:
+74 backend tests, 15 frontend tests, Ruff, pip check, and the frontend build passed.
+The database suite checks migration `0003` against SQLAlchemy metadata and runs
+an upgrade/downgrade roundtrip in disposable schemas. Chat tests use the shared
+BankSim fixture and do not reset the application's database.
+
+`tests/test_llm.py` exercises the installed official SDK using httpx MockTransport
+to inspect the actual outgoing request and validate returned JSON, usage, invalid
+output, timeouts, sanitized provider failures, and the absence of retries.
+`tests/integration/test_chat.py` separately tests real PostgreSQL ownership,
+history, idempotency, rollback/auditing, limits, and concurrent row locks using
+independent database connections. Its fake provider is test-only and cannot be
+selected through runtime configuration. Frontend tests check submission/history,
+plain-text HTML escaping, same-ID retry, and missing-configuration behavior.
+
+The existing Edge smoke script now creates/reopens a real empty conversation,
+checks the missing-provider state, and checks Text assistant on mobile along with
+the banking regression flows. It explicitly clears provider configuration in
+its subprocess environment, makes no paid model request, and creates only its
+disposable QA database. `.artifacts/chat-mobile.png` was visually inspected.
+
+Live model acceptance subsequently passed using locally configured
+`gemini-3.5-flash-lite`: three real HTTP chat requests verified a general answer,
+a contextual follow-up, and a safe account/action limitation response. Pydantic
+validation, provider usage metadata, saved reload, retry deduplication, and
+unchanged card/loan records passed. Edge reopened these live responses after
+refresh at desktop/mobile sizes with no page errors or overflow. Local evidence
+is in ignored `.artifacts/phase5-live-chat.json` and `phase5-live-*.png`.
+
+Live integration revealed that `response_schema` encoded `additionalProperties`
+using a provider-rejected field. The adapter now sends the Pydantic JSON schema
+through `response_json_schema`; the outgoing-field regression assertion and all
+11 adapter tests passed after the fix. The existing 74-test backend and 15-test
+frontend results above precede this narrow follow-up; unchanged UI tests/build
+were not repeated. MockTransport alone cannot verify live API compatibility.
+The live smoke samples do not establish broad answer accuracy, prompt-injection
+resistance, provider uptime, or invoiced charges; those evaluations remain later work.

@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     app_secret_key: SecretStr | None = None
     access_token_expire_minutes: int = Field(default=30, ge=1, le=120)
     confirmation_expire_seconds: int = Field(default=300, ge=30, le=900)
+    llm_provider: Literal["", "gemini"] = ""
+    llm_api_key: SecretStr | None = None
+    llm_model: str = Field(default="", max_length=120)
+    llm_timeout_seconds: int = Field(default=30, ge=5, le=45)
+    llm_max_output_tokens: int = Field(default=1024, ge=256, le=4096)
+
+    @property
+    def llm_configured(self) -> bool:
+        key = self.llm_api_key.get_secret_value().strip() if self.llm_api_key else ""
+        return self.llm_provider == "gemini" and bool(key and self.llm_model.strip())
 
     @property
     def auth_configured(self) -> bool:

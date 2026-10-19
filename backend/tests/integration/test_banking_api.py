@@ -2,16 +2,13 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
-from app.core.config import Settings
 from app.core.security import LoginLimiter
-from app.main import create_app
 from app.models import AuditLog, Card, Customer, KYCRecord, Loan, PendingAction
-from app.seed.demo_data import DEMO_PASSWORD, demo_id, seed_demo
+from app.seed.demo_data import DEMO_PASSWORD, demo_id
 from app.services.banking import BankingService
 
 pytestmark = pytest.mark.integration
@@ -24,20 +21,6 @@ LOAN = {
     "monthly_income": "50000.00",
     "monthly_obligations": "5000.00",
 }
-
-
-@pytest.fixture
-def api(migrated_db):
-    connection, _ = migrated_db
-    with Session(connection) as db, db.begin():
-        seed_demo(db)
-    connection.commit()
-    application = create_app(
-        Settings(_env_file=None, app_env="test", app_secret_key=KEY),
-        session_factory=sessionmaker(connection, expire_on_commit=False),
-    )
-    with TestClient(application) as client:
-        yield client, connection
 
 
 def login(client, name="asha"):

@@ -806,3 +806,9 @@ footer {
     padding: 24px;
   }
 }
+/* Chat stays plain text so provider output cannot inject HTML. */
+.chat-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-turn { border-bottom: 1px solid #e2e8f0; padding: 1rem 0; }
+.chat-json { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; font-size: .8rem; }
+.chat-panel select, .chat-panel textarea { width: 100%; }
+.chat-transcript { margin: 1rem 0; }

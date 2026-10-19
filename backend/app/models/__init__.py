@@ -226,3 +226,23 @@ class PolicyChunk(IdentityMixin, Base):
         DateTime(timezone=True), server_default=func.now()
     )
     document: Mapped[PolicyDocument] = relationship(back_populates="chunks")
+
+
+class Conversation(IdentityMixin, CreatedMixin, Base):
+    __tablename__ = "conversations"
+    customer_id: Mapped[UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    title: Mapped[str] = mapped_column(String(80))
+
+
+class ChatTurn(IdentityMixin, CreatedMixin, Base):
+    __tablename__ = "chat_turns"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "message_id", name="uq_chat_turn_message"),
+        UniqueConstraint("conversation_id", "position", name="uq_chat_turn_position"),
+        CheckConstraint("position BETWEEN 1 AND 100", name="position"),
+    )
+    conversation_id: Mapped[UUID] = mapped_column(ForeignKey("conversations.id"), index=True)
+    message_id: Mapped[UUID]
+    position: Mapped[int] = mapped_column(Integer)
+    user_text: Mapped[str] = mapped_column(Text)
+    response: Mapped[dict] = mapped_column(JSONB)

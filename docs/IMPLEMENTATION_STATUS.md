@@ -1,6 +1,7 @@
 # Implementation status
 
-Updated: 2026-10-14. Implementation authorized by the user; phased delivery.
+Updated: 2026-10-20. Active implementation: `BankAI_Implementation_Plan_2.md`.
+Original implementation-plan documents remain preserved; phased delivery.
 
 | Phase | Status |
 |---|---|
@@ -9,12 +10,88 @@ Updated: 2026-10-14. Implementation authorized by the user; phased delivery.
 | 2: Models, migrations and fictional seed data | Complete; live migration, repeat seed and integration tests passed |
 | 3: Authentication and BankSim APIs | Complete; 57 tests and live Docker API checks passed |
 | 4: Banking dashboard | Complete; 12 UI tests, build and Edge desktop/mobile flows passed |
-| 5: LLM adapter and text chat | Not started |
+| 5: LLM adapter and text chat | Complete; local tests, live Gemini conversation, saved history, and browser checks passed |
 | 6: Main five-agent system | Not started |
 | 7: RAG | Not started |
 | 8A: Browser voice; 8B: actual outbound telephone calling | Not started |
 | 9A–9C: Evaluation engine, web dashboard and benchmark | Not started |
 | 10: Final deployment/demo verification | Not started |
+
+## Plan 2 Phase 5: text-chat foundation
+
+Implemented on branch `plan2-phase5`; `plan2-phase4-checkpoint` retains the prior
+tracked application. The original two implementation-plan files are unchanged.
+Phase 5 publication is tracked in the repository's Git history.
+
+Added a direct Google Gen AI SDK adapter (Gemini), backend-only configuration,
+single-attempt bounded provider calls, sanitized errors, Pydantic guidance and
+final responses, and model/prompt/run/token/timing metadata. No additional
+agent framework is installed; CrewAI/ADK interoperability starts in Phase 6.
+
+Authenticated chat APIs create/list/reopen customer-owned conversations and save
+successful exchanges. Migration `0003` adds conversation/turn tables without
+changing banking records. The current local database is upgraded to `0003`.
+The last ten exchanges form model context, each conversation allows 100 turns,
+and question length is bounded to 2,000 characters. Row locking prevents
+simultaneous generation in one conversation. Replaying an existing message
+ID/text reuses its saved response; changed text with that ID is rejected.
+
+Added Text assistant navigation, provider availability state, saved history,
+pagination, plain-text messages, JSON response details, retry handling, and
+accessible loading/error/disabled states. Chat has no tools, account access,
+policy retrieval, or banking mutation path. Existing banking pages remain usable.
+
+| Verification | Result |
+|---|---|
+| Backend complete suite with isolated PostgreSQL schemas | 74 passed |
+| SDK transport tests | Real SDK serialization/schema parsing exercised through httpx MockTransport; no external model call |
+| Chat integration tests | Ownership, persistence/context, retry deduplication, input validation, failure rollback/auditing, context/turn limits, concurrent locking, and throttling passed |
+| Ruff and pip check | Passed |
+| Frontend behavior tests | 15 passed, including three chat tests |
+| Frontend production build | Passed |
+| Edge browser smoke | Desktop/mobile existing banking flows and missing-provider/saved-conversation chat flow passed; no browser errors or page overflow |
+| Visual inspection | Mobile chat screenshot inspected |
+| Migration consistency | Upgrade/downgrade/model comparison passed in isolated schema; local DB at `0003` |
+| Docker | Backend/frontend images rebuilt, database/API healthy, frontend proxy/auth/chat availability/history and banking HTTP checks passed |
+
+**Live Phase 5 acceptance passed:** The user supplied provider credentials, stored
+only in the ignored root `.env`. Authenticated model discovery succeeded. The
+initial model was unavailable to new users; the provider's replacement,
+`gemini-3.5-flash-lite`, was verified and configured locally. No key is recorded in
+tracked or non-ignored files.
+
+Live testing exposed a protocol mismatch in the SDK's `response_schema` encoding
+of Pydantic `additionalProperties`. The adapter now sends
+`response_json_schema=Guidance.model_json_schema()` and still validates responses
+through Pydantic. A regression assertion checks the actual outgoing JSON-schema
+field. All 11 adapter tests and Ruff passed after this fix; no frontend changes
+were needed in this follow-up.
+
+Three real end-to-end requests through the Docker frontend proxy and authenticated
+API passed: a general EMI explanation, a contextual fictional example, and an
+account/card action request. The third response correctly reported `needs_tools`,
+directed the user to the banking pages, and claimed no balance or completed action.
+Card and loan records remained unchanged. Responses validated against `ChatReply`,
+reported 251/347/408 total tokens respectively, and reopened as three persisted
+turns. Retrying the first message ID returned the identical saved response.
+These token totals are provider usage, not an invoiced cost estimate.
+
+Edge verification reopened the live conversation after refresh, checked all
+three replies, and passed desktop/mobile layout and browser-error checks. Evidence
+is stored locally in ignored `.artifacts/phase5-live-chat.json`,
+`.artifacts/phase5-live-desktop.png`, and `.artifacts/phase5-live-mobile.png`.
+The backend Docker image was rebuilt with the schema fix. Phase 5 is complete;
+Phase 6 has not started. Broader prompt safety evaluation and cloud deployment
+remain later phases. Because the credential was shared in conversation, the user
+should rotate it and update local configuration after testing.
+
+Limits: this is a local prototype. Prompt instructions do not guarantee factual
+correctness; replies are labeled AI guidance and have no action authority.
+Provider billing cannot be exactly-once across a crash after the provider responds
+but before a database commit. The throttle is per process; distributed quotas,
+full framework tracing/guardrails, retention controls, and cloud session hardening
+belong to later Plan 2 phases. A pre-existing Starlette TestClient deprecation
+warning remains; it does not fail the suite.
 
 ## Repository inspection
 

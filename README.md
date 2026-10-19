@@ -9,12 +9,68 @@ variants: **2, 3, and 5 total agents**, using the same banking capabilities.
 Phases 0–4: a working local banking web application with JWT login,
 dashboard, accounts, filtered transactions, cards, demo loans and support.
 It uses the seeded PostgreSQL records and confirmed banking APIs.
-AI chat, agent orchestration, voice and evaluation execution are later phases.
+Plan 2 Phase 5 now adds authenticated text chat, saved conversations, and a
+direct Gemini SDK adapter with Pydantic responses. Live model verification passed
+with the configured local provider. Agent orchestration, voice and evaluation execution
+are later phases. Active implementation follows
+[Implementation Plan 2](BankAI_Implementation_Plan_2.md); the original plans are preserved.
 Phase 8 includes browser voice and actual outbound phone testing: the owner
 starts an approved call and the professor/recipient speaks with BankAI on
 their phone. This is planned, not implemented. Telephone credentials, an
 appropriate provider/caller number and a call budget will be required.
 See [implementation status](docs/IMPLEMENTATION_STATUS.md).
+
+## Text assistant setup (Plan 2 Phase 5)
+
+Update the ignored root `.env` on the backend only:
+
+```dotenv
+LLM_PROVIDER=gemini
+LLM_API_KEY=your-provider-key
+LLM_MODEL=your-supported-model-id
+LLM_TIMEOUT_SECONDS=30
+LLM_MAX_OUTPUT_TOKENS=1024
+```
+
+Use a model available to your Google Gemini API project that supports structured
+JSON output. Placeholder values above are not working credentials. The adapter
+uses the [official Google Gen AI SDK](https://github.com/googleapis/python-genai)
+directly; no agent framework is added in this phase. Other providers are not yet
+implemented. Installing the updated backend dependencies and running
+`python -m alembic upgrade head` adds the conversation tables without resetting
+banking data. Restart the backend after changing configuration. For Docker, run
+the migration with `docker compose exec backend python -m alembic upgrade head`
+and recreate the backend after environment changes.
+
+Sign in and open **Text assistant**, then start a conversation. You can reopen
+saved conversations and inspect structured response details. Model calls send
+the current question and the latest ten exchanges to the configured provider;
+do not enter real credentials or personal information. History is stored in the
+local database and isolated by customer. The list pages through 50 conversations
+at a time, with at most 100 exchanges per conversation and 2,000 characters per question.
+
+This phase provides general AI-generated guidance only. It has no account tools,
+verified policy sources, or banking-action capability. Use the existing banking
+pages for those tasks. CrewAI/ADK, A2A, MCP, and shared Blackboard start in Phase 6.
+Missing configuration produces a visible unavailable state and API 503; it never
+silently returns a fake AI answer. Configured status checks the settings, not
+provider reachability or available credit.
+
+The API provides `GET /api/v1/chat/status`, `GET/POST /api/v1/chat/conversations`,
+`GET /api/v1/chat/conversations/{id}`, and `POST /api/v1/chat`. Posting a question
+requires a conversation ID, a client-generated UUID `message_id`, and `message`.
+Retrying the same ID/text reuses a committed response; a changed message with the
+same ID is rejected. Concurrent sends to one conversation receive 409. On a
+connection failure, check saved history before changing and resending the text.
+A provider response followed by a server/database failure can still incur a charge
+without a saved answer; this prototype cannot guarantee provider-level exactly-once billing.
+
+Provider requests have one attempt and a configurable timeout. Generation is
+limited to ten new requests per minute per customer per API process. This local
+throttle is not a distributed deployment quota. Failed generations are not added
+to chat context; sanitized failure audit records retain the request ID. Replies
+save model/prompt version, run ID, duration, and provider-reported tokens, with
+missing usage marked unavailable. Cost reporting and full tracing arrive later.
 
 ## Prerequisites
 

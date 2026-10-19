@@ -77,6 +77,9 @@ def main():
             "APP_ENV": "development",
             "APP_SECRET_KEY": secrets.token_urlsafe(48),
             "API_PROXY_TARGET": f"http://127.0.0.1:{api_port}",
+            "LLM_PROVIDER": "",
+            "LLM_API_KEY": "",
+            "LLM_MODEL": "",
         }
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         server = subprocess.Popen(
@@ -204,6 +207,14 @@ def main():
                 page.get_by_role("heading", name="Demo browser QA inquiry")
             ).to_be_visible()
             page.set_viewport_size({"width": 390, "height": 844})
+            page.get_by_role("link", name="Text assistant", exact=True).click()
+            expect(page.get_by_text("Text assistance is unavailable until", exact=False)).to_be_visible()
+            page.get_by_role("button", name="New conversation", exact=True).click()
+            page.get_by_label("Your question").fill("What is an EMI?")
+            expect(page.get_by_role("button", name="Send message", exact=True)).to_be_disabled()
+            page.reload()
+            expect(page.get_by_label("Saved conversations")).to_contain_text("New conversation")
+            page.screenshot(path=str(output / "chat-mobile.png"), full_page=True)
             for title in (
                 "Dashboard",
                 "Accounts",
@@ -211,6 +222,7 @@ def main():
                 "Cards",
                 "Loans",
                 "Support",
+                "Text assistant",
                 "About",
             ):
                 page.get_by_role("link", name=title, exact=True).click()
@@ -248,7 +260,7 @@ def main():
             assert not errors, errors
             browser.close()
         print(
-            "Edge desktop/mobile smoke passed: login, refresh, all pages, card/loan confirmation, support, customer switching and expired session; no browser errors."
+            "Edge desktop/mobile smoke passed: login, refresh, all pages, card/loan confirmation, support, saved chat and missing-provider state, customer switching and expired session; no browser errors."
         )
     except Exception:
         if page is not None and not page.is_closed():

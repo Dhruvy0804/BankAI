@@ -63,9 +63,15 @@ def decode_token(token: str, settings: Settings) -> UUID:
 class LoginLimiter:
     """Local single-process throttle; bounded memory, no forwarded-IP trust."""
 
-    def __init__(self, attempts: int = 10, window: int = 60):
+    def __init__(
+        self,
+        attempts: int = 10,
+        window: int = 60,
+        message: str = "Too many login attempts. Try again later.",
+    ):
         self.attempts = attempts
         self.window = window
+        self.message = message
         self.entries: dict[str, deque] = {}
         self.lock = Lock()
 
@@ -76,10 +82,10 @@ class LoginLimiter:
                 k: v for k, v in self.entries.items() if v and v[-1] > now - self.window
             }
             if key not in self.entries and len(self.entries) >= 10000:
-                raise APIError(429, "RATE_LIMITED", "Too many login attempts. Try again later.")
+                raise APIError(429, "RATE_LIMITED", self.message)
             times = self.entries.setdefault(key, deque())
             while times and times[0] <= now - self.window:
                 times.popleft()
             if len(times) >= self.attempts:
-                raise APIError(429, "RATE_LIMITED", "Too many login attempts. Try again later.")
+                raise APIError(429, "RATE_LIMITED", self.message)
             times.append(now)

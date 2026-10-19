@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, type Api, type Customer, request, useResource } from "./api";
 import { ResourceState } from "./components";
 import Login, { type Session } from "./Login";
+import Chat from "./Chat";
 import {
   Accounts,
   Cards,
@@ -20,6 +21,7 @@ const navigation = [
   ["cards", "Cards", "▤"],
   ["loans", "Loans", "▥"],
   ["support", "Support", "◎"],
+  ["chat", "Text assistant", "◌"],
   ["about", "About", "ⓘ"],
 ] as const;
 type Page = (typeof navigation)[number][0];
@@ -133,6 +135,7 @@ function BankingWorkspace({ api, signOut }: { api: Api; signOut: () => void }) {
                 {page === "cards" && <Cards api={api} />}
                 {page === "loans" && <Loans api={api} />}
                 {page === "support" && <Support api={api} />}
+                {page === "chat" && <Chat api={api} />}
                 {page === "about" && <About />}
               </div>
             )}
@@ -159,11 +162,11 @@ function About() {
       <p>
         Secure demo login, account and transaction views, confirmed card
         blocking, EMI calculation, simulated loan applications and support
-        tickets.
+        tickets, and saved text conversations when a model provider is configured.
       </p>
       <h3>Coming next</h3>
       <p>
-        Text assistance, a five-agent system, grounded policy answers and voice.
+        A five-agent system, grounded policy answers and voice.
         A private evaluation lab will compare the same tasks across 2, 3 and 5
         total agents, including the supervisor.
       </p>
