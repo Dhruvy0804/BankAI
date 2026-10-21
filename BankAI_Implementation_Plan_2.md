@@ -35,7 +35,7 @@ Retain:
 
 Repository status at preparation: Phases 0–4 are recorded as complete; Phases 5 onward are not started. Recheck the repository and test results before implementation.
 
-Current checkpoint: Phase 5 and Phase 6A–6C have since been implemented and locally verified, including a live five-role ADK/CrewAI workflow over A2A and MCP. Phase 7 (RAG) is next; evaluation comparisons and cloud deployment remain later work.
+Current checkpoint: Phases 5, 6A–6C, and 7 have been implemented and locally verified. Phase 7 adds approved fictional policy embeddings, MCP retrieval, validated citations, and chat source excerpts. Live grounded/missing-policy conversations and desktop/mobile source inspection passed. Phase 8A (browser voice) is next; telephone calling, evaluation comparisons, and cloud deployment remain later work.
 
 ## 3. Professor's requirements and acceptance evidence
 

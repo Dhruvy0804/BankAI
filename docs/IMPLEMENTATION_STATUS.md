@@ -1,6 +1,6 @@
 # Implementation status
 
-Updated: 2026-10-20. Active implementation: `BankAI_Implementation_Plan_2.md`.
+Updated: 2026-10-21. Active implementation: `BankAI_Implementation_Plan_2.md`.
 Original implementation-plan documents remain preserved; phased delivery.
 
 | Phase | Status |
@@ -14,15 +14,72 @@ Original implementation-plan documents remain preserved; phased delivery.
 | 6A: Frameworks, A2A and shared state | Complete; real ADK/CrewAI interoperability and ownership/revision tests passed |
 | 6B: MCP banking tools | Complete; 10 scoped tools, real protocol calls and validation checks passed |
 | 6C: Main five-agent system | Complete locally; live five-role workflow, protected actions, callbacks, trace UI and Docker verified |
-| 7: RAG | Not started |
+| 7: RAG | Complete locally; approved corpus, embeddings, MCP retrieval, validated citations, live answers and desktop/mobile checks passed |
 | 8A: Browser voice; 8B: actual outbound telephone calling | Not started |
 | 9A–9C: Evaluation engine, web dashboard and benchmark | Not started |
 | 10: Final deployment/demo verification | Not started |
 
+## Plan 2 Phase 7: fictional policy retrieval
+
+Implemented on `plan2-phase7` and included in this Git checkpoint. Next phase:
+**8A, browser voice**. The Word abstract and original implementation plans are
+preserved; no banking records are reset.
+
+Three approved Markdown documents provide ten bounded, named citation sections.
+`app.services.policies` offers an explicit idempotent ingestion command using
+the existing policy tables and the direct Google embedding SDK. Live
+`gemini-embedding-001` document/query requests with normalized 768-dimensional
+vectors passed. The ignored local configuration reuses the existing provider
+key; no secret is added to the repository. No dependency or migration is added.
+
+Support's eleventh MCP tool, `search_policies`, returns a typed found/missing/
+conflict result with document/chunk IDs, checksums, exact excerpts and similarity.
+Only checked-in approved file versions qualify. Exact pgvector search is bounded
+to four results above 0.60 cosine similarity. Old versions, arbitrary database
+sources, and modified chunk text cannot become evidence. Query size, model,
+vector dimensions/values and corpus completeness are validated.
+
+Specialist and supervisor guardrails reject invented citations and answered
+policy questions without retrieval. Missing/conflicting results require a
+non-answer status. Source metadata is assembled from trusted MCP receipts and
+persists with chat history and Blackboard artifacts. The final prompt version is
+`phase7-rag-v1`; Phase 5/6 history remains readable. Source excerpts expand in the
+chat UI, and retrieval events record source IDs, checksums, embedding model and
+available usage without credentials or private reasoning.
+
+Verification: the final backend suite passed **98 tests, with 4 opt-in tests
+skipped**; the default suite excludes paid provider and optional Edge tests.
+The frontend's 17 tests and production build passed. Two real-provider chat
+samples passed through the local frontend proxy: loan document requirements
+returned one citation (4 model calls, 1 tool, 7,431 model tokens); an unpublished
+foreign-exchange fee returned `needs_tools` with no fabricated source (5 model
+calls, 1 tool, 7,064 model tokens). Saved history and retry deduplication passed.
+Evidence is local and ignored: `.artifacts/phase7-live.json`.
+
+Edge desktop/mobile source expansion, real protocol retrieval timeline,
+absence of horizontal overflow and browser errors passed with deterministic test
+model/embedding responses. Screenshots: `.artifacts/phase7-policy-*.png`.
+Docker's initial build hit a temporary Docker Hub DNS error; retry built both
+images and the application started successfully. A real-provider Docker chat
+then returned a valid document-policy citation through A2A/MCP/Blackboard
+(4 model calls, 1 tool, 7,339 model tokens). Docker repeat ingestion embedded zero
+chunks. Evidence: `.artifacts/phase7-docker-live.json`. Ruff, dependency checks,
+Git whitespace and secret scans passed; original plan hashes are unchanged.
+See `docs/TESTING.md` for reproduction commands and final checks.
+
+Limits: fixed small fictional corpus; no upload interface or general web search.
+Known instruction-like patterns are rejected and prompts treat passages as data,
+but this is not exhaustive injection detection or proof of semantic entailment.
+Conflicts use equal section names, so differently worded contradictions need
+operator review. The similarity cutoff has smoke-test evidence, not a completed
+retrieval benchmark. Embedding token counts were unavailable from the provider
+and remain `null`; generative model totals exclude embedding usage. No cloud,
+voice, telephone, or 2/3/5 comparative benchmark is claimed.
+
 ## Plan 2 Phase 6: ADK/CrewAI banking agents
 
 Implemented on branch `plan2-phase6`. The original plan files remain unchanged.
-Phase 6 is included in this Git checkpoint. Current next phase: **7, RAG**.
+Phase 6 is included in Git checkpoint `80d3535`. At that checkpoint, Phase 7 was next.
 
 The main configuration has one Google ADK supervisor and four CrewAI specialists:
 Account, Card, Loan, and Policy/Support. No hidden manager/planner/reviewer agents
@@ -105,7 +162,7 @@ Limits: input injection/abuse checks are heuristic, not a claim of exhaustive
 attack prevention. Broad safety/performance/cost comparisons are Phase 9. Some
 failed runs may leave unconfirmed requests that expire; automatic durable recovery
 and exactly-once billing are not implemented. A cancelled external request may
-still consume provider usage. No verified policy corpus, voice, phone calling,
+still consume provider usage. At the Phase 6 checkpoint, no verified policy corpus, voice, phone calling,
 2/3-agent execution, comparison dashboard, or cloud deployment is claimed here.
 
 ## Plan 2 Phase 5: text-chat foundation

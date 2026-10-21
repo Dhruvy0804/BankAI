@@ -4,6 +4,24 @@ import { type Api, ApiError } from "./api";
 import Chat from "./Chat";
 
 afterEach(cleanup);
+
+test("policy citations expose the exact excerpt safely and preserve the agent timeline", async () => {
+  const source = { citation_id: "P-test", title: "Demo policy", section: "Loan documents", source: "demo_loans.md", checksum: "a".repeat(64), excerpt: "No real documents required. <script>unsafe()</script>" };
+  const mock = vi.fn(async (path: string) => {
+    if (path === "/chat/status") return { configured: true, mode: "agents" };
+    if (path.startsWith("/chat/conversations?")) return [conversation];
+    if (path === "/chat/conversations/c1") return { ...conversation, turns: [{ message_id: "m1", user_text: "Documents?", response: { ...reply, prompt_version: "phase7-rag-v1", sources: [source] } }] };
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  render(<Chat api={mock as Api} />);
+  expect(await screen.findByRole("region", { name: "Policy sources" })).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Demo policy · Loan documents"));
+  expect(screen.getByText(source.excerpt)).toBeVisible();
+  expect(document.querySelector("script")).toBeNull();
+  expect(screen.getByText(/Version aaaaaaaaaaaa/)).toBeInTheDocument();
+  expect(screen.getByText("Agent activity and shared context")).toBeInTheDocument();
+  expect(mock.mock.calls.some(([path]) => path.startsWith("/chat/runs/"))).toBe(false);
+});
 const conversation = { id: "c1", title: "New conversation", created_at: "2026-10-20T10:00:00Z" };
 const reply = {
   status: "guidance", answer: "An EMI is a monthly instalment. <script>unsafe()</script>",

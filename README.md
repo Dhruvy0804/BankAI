@@ -6,13 +6,14 @@ variants: **2, 3, and 5 total agents**, using the same banking capabilities.
 
 ## Current checkpoint
 
-Phases 0–6: a working local banking web application with JWT login,
+Phases 0–7: a working local banking web application with JWT login,
 dashboard, accounts, filtered transactions, cards, demo loans and support.
 It uses the seeded PostgreSQL records and confirmed banking APIs.
 Plan 2 Phase 5 now adds authenticated text chat, saved conversations, and a
 direct Gemini SDK adapter with Pydantic responses. Live model verification passed
 with the configured local provider. Phase 6 adds an ADK supervisor, four CrewAI
-specialists, A2A, MCP tools and a shared PostgreSQL Blackboard. Voice and evaluation
+specialists, A2A, MCP tools and a shared PostgreSQL Blackboard. Phase 7 adds
+fictional policy retrieval and validated source citations. Voice and evaluation
 execution remain later phases. Active implementation follows
 [Implementation Plan 2](BankAI_Implementation_Plan_2.md); the original plans are preserved.
 Phase 8 includes browser voice and actual outbound phone testing: the owner
@@ -52,7 +53,7 @@ at a time, with at most 100 exchanges per conversation and 2,000 characters per 
 
 In `CHAT_MODE=guidance`, the Phase 5 flow provides general AI-generated guidance
 only, without account tools or banking actions. `CHAT_MODE=agents` enables the
-Phase 6 workflow below. Verified policy retrieval remains Phase 7.
+Phase 6 workflow below, with Phase 7 policy retrieval when configured and ingested.
 Missing configuration produces a visible unavailable state and API 503; it never
 silently returns a fake AI answer. Configured status checks the settings, not
 provider reachability or available credit.
@@ -126,7 +127,7 @@ Card blocking and loan applications produce pending actions. Select **Review
 action**, check the server-bound details, then use **Confirm action**. Chat text
 such as “yes” cannot confirm an action. Cancelling the dialog leaves the bank
 record unchanged. Support tickets can be created when explicitly requested.
-There is no verified policy corpus until Phase 7.
+Phase 7 adds the approved fictional policy corpus described below.
 
 A2A Agent Cards/endpoints under `/internal/a2a/{role}/` and MCP `/internal/mcp/`
 require short-lived customer/run/role-bound grants. Customer JWTs cannot call
@@ -158,6 +159,69 @@ Prompt checks are heuristic and do not replace authorization, schema validation
 or confirmation. Broader adversarial/performance comparisons, 2/3-agent variants,
 alternate architectures/prompts, voice/phone calls, distributed quotas and cloud
 hardening remain later Plan 2 phases. See [testing](docs/TESTING.md).
+
+## Policy answers and citations (Plan 2 Phase 7)
+
+The Support specialist now calls `search_policies` through authenticated MCP.
+Three checked-in fictional policies contain ten named sections covering loan
+eligibility/documents/EMI/confirmation, cards, accounts/KYC, and support. These are
+educational BankSim rules, not a real bank's published terms. The document
+requirements explicitly prohibit uploading real identity documents.
+
+Configure the ignored backend `.env`:
+
+```dotenv
+CHAT_MODE=agents
+EMBEDDING_PROVIDER=gemini
+EMBEDDING_MODEL=gemini-embedding-001
+EMBEDDING_API_KEY=
+```
+
+A blank embedding key reuses `LLM_API_KEY`; both stay backend-only. Restart the
+backend after configuration changes. The direct Google SDK uses
+[document/query task types](https://ai.google.dev/gemini-api/docs/embeddings)
+and normalized 768-dimensional embeddings. No new agent or framework is added.
+
+Ingest explicitly after the database is ready, from `backend`:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.services.policies
+```
+
+Or, with Docker running:
+
+```powershell
+docker compose exec backend python -m app.services.policies
+```
+
+Ingestion makes provider calls only for new/changed sections; an unchanged repeat
+embeds zero chunks. It is never run on startup or from a customer endpoint. Old
+source versions remain stored, while retrieval accepts only the current approved
+filenames/checksums and matching chunk text/model/dimensions. Existing banking
+records and historical chat citations are preserved. No schema migration or new
+dependency is needed beyond Phase 6.
+
+Try **Text assistant**: “Which documents are required for a demo personal loan?”
+or “What are the demo loan eligibility rules?” Expand **Fictional policy sources**
+to inspect the cited section, exact excerpt, source filename and checksum. The
+run timeline includes `retrieval_result`, MCP and Blackboard events. Final
+`sources` are assembled from authenticated tool receipts; invented citation IDs
+and an answered policy response without retrieval evidence are rejected.
+
+Search uses exact pgvector cosine distance, a fixed 0.60 similarity cutoff, and
+at most four sections. Missing matches return `missing`; different texts with
+the same section name return `conflict`, requiring clarification or `needs_tools`
+rather than a chosen policy. Missing configuration/index, tampered text, and
+provider failures fail safely. Arbitrary uploads, private customer documents,
+external URLs, and older source versions are not searched.
+
+Limits: source selection and answer entailment still need quality evaluation;
+similarity is not a correctness guarantee. Conflict detection uses matching
+section names and does not detect every semantic contradiction. Injection
+screening is heuristic; retrieved text cannot change deterministic authorization
+or confirmation rules. Displayed token totals count generative model tokens;
+embedding usage is recorded separately in retrieval/tool events when available,
+otherwise `null`. No embedding cost or benchmark result is fabricated.
 
 ## Prerequisites
 

@@ -17,6 +17,7 @@ type Reply = {
   total_tokens: number | null;
   pending_actions?: Pending[];
   prompt_version?: string;
+  sources?: { citation_id: string; title: string; source: string; section: string; excerpt: string; checksum: string }[];
 };
 type Detail = Conversation & {
   turns: { message_id: string; user_text: string; response: Reply; created_at: string }[];
@@ -35,7 +36,7 @@ export default function Chat({ api }: { api: Api }) {
       <h2>Text assistant</h2>
       <p className="muted">
         {status.data?.mode === "agents"
-          ? "Ask about your fictional accounts, cards, or demo loan calculations. Sensitive requests require a separate confirmation. Verified policy answers are coming later. "
+          ? "Ask about your fictional accounts, cards, loan calculations, or published demo policies. Policy answers include sources. Sensitive requests require a separate confirmation. "
           : "Ask for general banking explanations. This chat cannot look up accounts, verify policies, or perform banking actions yet. Use the banking pages for those tasks. "}
         Do not enter passwords, PINs, OTPs, or real banking information.
       </p>
@@ -117,12 +118,20 @@ function ConversationChat({ api, id, configured, setBusy, changed }: {
             <h3>You</h3><p className="chat-text">{turn.user_text}</p>
             <h3>BankAI · {turn.response.status.replaceAll("_", " ")}</h3>
             <p className="chat-text">{turn.response.answer}</p>
+            {!!turn.response.sources?.length && <section aria-label="Policy sources">
+              <h4>Fictional policy sources</h4>
+              {turn.response.sources.map((source) => <details key={source.citation_id}>
+                <summary>{source.title} · {source.section}</summary>
+                <p className="chat-text">{source.excerpt}</p>
+                <p className="muted">[{source.citation_id}] · {source.source} · Version {source.checksum.slice(0, 12)}</p>
+              </details>)}
+            </section>}
             <details><summary>Response details</summary>
-              <p className="muted">{turn.response.model} · {turn.response.duration_ms} ms · {turn.response.total_tokens ?? "Unavailable"} total tokens</p>
+              <p className="muted">{turn.response.model} · {turn.response.duration_ms} ms · {turn.response.total_tokens ?? "Unavailable"} model tokens</p>
               <p className="muted">Request: {turn.response.request_id}</p>
               <pre className="chat-json">{JSON.stringify(turn.response, null, 2)}</pre>
             </details>
-            {turn.response.prompt_version === "phase6-blackboard-v1" && <RunActivity api={api} runId={turn.response.run_id} />}
+            {["phase6-blackboard-v1", "phase7-rag-v1"].includes(turn.response.prompt_version || "") && <RunActivity api={api} runId={turn.response.run_id} />}
             {turn.response.pending_actions?.map((pending) => <PendingChatAction key={pending.id} api={api} pending={pending} />)}
           </article>)}
         </div>

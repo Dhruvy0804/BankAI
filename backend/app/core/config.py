@@ -29,6 +29,23 @@ class Settings(BaseSettings):
     chat_mode: Literal["guidance", "agents"] = "guidance"
     agent_base_url: str = "http://127.0.0.1:8000"
     agent_timeout_seconds: int = Field(default=150, ge=30, le=180)
+    embedding_provider: Literal["", "gemini"] = ""
+    embedding_api_key: SecretStr | None = None
+    embedding_model: Literal["", "gemini-embedding-001"] = ""
+
+    @property
+    def embedding_key(self) -> SecretStr | None:
+        return self.embedding_api_key or self.llm_api_key
+
+    @property
+    def embedding_configured(self) -> bool:
+        key = self.embedding_key
+        return bool(
+            self.embedding_provider == "gemini"
+            and self.embedding_model
+            and key
+            and key.get_secret_value().strip()
+        )
 
     @field_validator("agent_base_url")
     @classmethod

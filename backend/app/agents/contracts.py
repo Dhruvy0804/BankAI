@@ -18,6 +18,7 @@ class ToolFact(Input):
 class SpecialistSummary(Input):
     status: Literal["answered", "clarification", "needs_tools", "refused"]
     answer: str = Field(min_length=1, max_length=4000)
+    source_ids: list[str] = Field(default_factory=list, max_length=8)
 
 
 class Artifact(Input):
@@ -41,6 +42,7 @@ class Delegation(Input):
 class SupervisorAnswer(Input):
     status: Literal["answered", "clarification", "needs_tools", "refused"]
     answer: str = Field(min_length=1, max_length=4000)
+    source_ids: list[str] = Field(default_factory=list, max_length=8)
 
 
 class ProtocolGrant(Input):

@@ -6,6 +6,7 @@ from pydantic import Field, field_validator
 
 from app.agents.contracts import ToolFact
 from app.schemas import Input, Output, PendingOut
+from app.services.policies import PolicySource
 
 
 class ChatInput(Input):
@@ -35,7 +36,9 @@ class ChatReply(Guidance):
     run_id: UUID
     provider: Literal["gemini"]
     model: str
-    prompt_version: Literal["phase5-guidance-v1", "phase6-blackboard-v1"] = "phase5-guidance-v1"
+    prompt_version: Literal["phase5-guidance-v1", "phase6-blackboard-v1", "phase7-rag-v1"] = (
+        "phase5-guidance-v1"
+    )
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
@@ -44,7 +47,7 @@ class ChatReply(Guidance):
     data: list[ToolFact] = Field(default_factory=list, max_length=16)
     artifact_ids: list[UUID] = Field(default_factory=list, max_length=4)
     pending_actions: list[PendingOut] = Field(default_factory=list, max_length=16)
-    sources: list[str] = Field(default_factory=list, max_length=0)
+    sources: list[PolicySource] = Field(default_factory=list, max_length=8)
     simulated: Literal[True] = True
 
 

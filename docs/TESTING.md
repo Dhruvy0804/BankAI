@@ -214,5 +214,57 @@ replay deduplication, typed finalization, and ordered trace events. Its JSON
 evidence stays in ignored `.artifacts/phase6-docker-live.json` without credentials.
 Local configuration is not a provider-health guarantee; key expiry/quota changes
 must produce safe errors. Non-failing upstream annotation/deprecation warnings
-are retained rather than hidden. RAG grounding, prompt/architecture comparisons,
+are retained rather than hidden. At the Phase 6 checkpoint, RAG grounding, prompt/architecture comparisons,
 load/cost benchmarks and cloud/phone acceptance remain later phases.
+
+## Plan 2 Phase 7 verification
+
+From `backend`, run the full database-backed suite or only policy checks:
+
+```powershell
+$env:BANKAI_RUN_DB_TESTS='1'
+.\.venv\Scripts\python.exe -m pytest -q --disable-warnings
+.\.venv\Scripts\python.exe -m pytest tests/test_policy_contracts.py tests/integration/test_policies.py -q
+```
+
+Policy tests use the existing disposable PostgreSQL schemas and real ADK,
+CrewAI, A2A HTTP and MCP transports. Model and embedding responses are mocked
+unless explicitly enabled. Checks cover ingestion/repeat behavior, relevant and
+irrelevant retrieval, wrong model/missing index, unapproved and tampered source
+rejection, named-section conflicts, tool permissions/receipts, citation
+fabrication, missing/conflicting policy answers, history and provenance.
+Final default result: **98 passed, 4 opt-in tests skipped**. The policy Edge test
+was separately enabled and passed. Frontend: **17 passed**, strict TypeScript
+and Vite build passed; Ruff, dependency and whitespace checks passed.
+
+Explicit paid provider acceptance (uses configured local keys):
+
+```powershell
+$env:BANKAI_LIVE_POLICY_TESTS='1'
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_policies.py::test_live_policy_answer -q
+```
+
+This ingests a disposable corpus and verifies a cited answer through the real
+framework/protocol workflow. Leave the flag unset for ordinary tests. Two local
+frontend-proxy acceptance samples additionally checked a grounded loan document
+answer and an unpublished fee, saved history and retry deduplication. Evidence:
+ignored `.artifacts/phase7-live.json`; embeddings report unknown usage as `null`.
+A real-provider Docker frontend-proxy request also verified an exact cited
+loan-document section, protocol events and Blackboard publication; repeat
+ingestion embedded zero chunks. Evidence: `.artifacts/phase7-docker-live.json`.
+
+Optional Edge source UI check, from the project root:
+
+```powershell
+$env:BANKAI_RUN_DB_TESTS='1'
+$env:BANKAI_BROWSER_POLICY_TESTS='1'
+$env:PYTHONPATH=(Resolve-Path '.qa-tools').Path
+cd backend
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_policies.py::test_policy_citation_browser -q
+```
+
+This starts an isolated Vite/API workflow with test-only provider responses.
+It verifies expandable source excerpts, retrieval traces, desktop/mobile layout
+and absence of browser errors. Screenshots stay in ignored `.artifacts`.
+The frontend citation test also verifies HTML-like excerpts render as plain text.
+No comparative retrieval, cost, prompt or architecture benchmark is claimed.

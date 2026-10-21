@@ -318,7 +318,7 @@ def test_adk_crewai_a2a_mcp_and_blackboard_end_to_end(runtime, simulated_models)
     response = send(client, cid, "Show accounts, calculate an EMI, and summarize")
     assert response.status_code == 200, response.text
     result = response.json()
-    assert result["prompt_version"] == "phase6-blackboard-v1"
+    assert result["prompt_version"] == "phase7-rag-v1"
     assert {fact["tool"] for fact in result["data"]} == {"account_snapshot", "calculate_emi"}
     assert result["total_tokens"] > 0
     trace = client.get("/api/v1/chat/runs/" + result["run_id"]).json()

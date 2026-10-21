@@ -18,6 +18,7 @@ from app.chat_schemas import (
 from app.core.errors import APIError
 from app.models import AgentArtifact, AgentEvent, AgentRun, AuditLog, ChatTurn, Conversation
 from app.schemas import PendingOut
+from app.services.policies import policy_sources
 
 router = APIRouter(prefix="/api/v1", tags=["Text chat"])
 
@@ -160,12 +161,17 @@ def chat(data: ChatInput, request: Request, db: DB, customer: Actor):
                 run_id=run_id,
                 provider="gemini",
                 model=request.app.state.settings.llm_model,
-                prompt_version="phase6-blackboard-v1",
+                prompt_version="phase7-rag-v1",
                 duration_ms=duration,
                 banking_actions_enabled=True,
                 data=facts,
                 artifact_ids=[artifact.id for artifact in artifacts],
                 pending_actions=pending,
+                sources=[
+                    source
+                    for key, source in policy_sources(facts).items()
+                    if key in answer.source_ids
+                ],
                 **usage,
             )
         else:
