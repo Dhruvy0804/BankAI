@@ -23,6 +23,7 @@ from a2a.types import (
 )
 from a2a.utils import new_agent_text_message, new_task
 
+from app.agents.configuration import AgentConfiguration
 from app.agents.contracts import ROLES, Artifact, Delegation
 from app.agents.security import ProtocolAuth, current_grant, issue_grant
 from app.agents.specialists import run_specialist
@@ -161,8 +162,18 @@ def mount_protocols(app, settings, factory):
 
 async def delegate_a2a(settings, factory, customer_id, run_id, role, task, consume):
     board = Blackboard(factory, run_id, customer_id)
-    request = Delegation(run_id=run_id, role=role, task=task, consume=consume)
-    board.read(request.consume)
+    with factory() as db:
+        config = AgentConfiguration.model_validate(board.owned(db, active=True).configuration)
+    if role not in config.roles:
+        raise APIError(403, "ROLE_DENIED", "Role is not in this run configuration.")
+    context = board.read(consume)
+    request = Delegation(
+        run_id=run_id,
+        role=role,
+        task=task,
+        consume=consume,
+        context=context if config.architecture == "direct" else [],
+    )
     token = issue_grant(settings, customer_id, run_id, role)
     base = f"{settings.agent_base_url}/internal/a2a/{role}/"
     board.event("supervisor", "a2a_send", target=role)

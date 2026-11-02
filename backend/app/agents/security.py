@@ -6,6 +6,7 @@ import jwt
 from pydantic import ValidationError
 from starlette.responses import JSONResponse
 
+from app.agents.configuration import AgentConfiguration
 from app.agents.contracts import ProtocolGrant
 from app.agents.state import Blackboard
 from app.core.errors import APIError
@@ -70,7 +71,9 @@ class ProtocolAuth:
                 raise APIError(403, "ROLE_DENIED", "Service grant does not authorize this role.")
             board = Blackboard(self.factory, grant.run_id, grant.sub)
             with self.factory() as db:
-                board.owned(db, active=True)
+                run = board.owned(db, active=True)
+                if grant.role not in AgentConfiguration.model_validate(run.configuration).roles:
+                    raise APIError(403, "ROLE_DENIED", "Role is not in this run configuration.")
                 customer = db.get(Customer, grant.sub)
                 if customer is None or not customer.is_active:
                     raise APIError(401, "INVALID_GRANT", "Inactive service identity.")

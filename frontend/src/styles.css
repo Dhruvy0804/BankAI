@@ -813,3 +813,9 @@ footer {
 .chat-panel select, .chat-panel textarea { width: 100%; }
 .chat-transcript { margin: 1rem 0; }
 .agent-timeline { max-height: 24rem; overflow: auto; padding-left: 1.5rem; }
+.agent-contributions { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; margin: 1rem 0; }
+.agent-contribution { border: 1px solid #d5e2db; border-radius: .65rem; padding: .85rem; background: #f8fbf9; overflow-wrap: anywhere; }
+.agent-contribution h5 { margin: 0 0 .5rem; text-transform: capitalize; }
+.agent-contribution p { margin: .4rem 0; }
+.demo-records { margin: 1rem 0; }
+.demo-records section { margin: 1.25rem 0; }

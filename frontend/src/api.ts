@@ -95,7 +95,7 @@ export async function request<T>(
   const abort = () => controller.abort();
   signal?.addEventListener("abort", abort, { once: true });
   if (signal?.aborted) abort();
-  const timeout = setTimeout(abort, path === "/chat" ? 190000 : 10000);
+  const timeout = setTimeout(abort, path === "/chat" ? 190000 : ["/voice/sessions", "/phone/calls"].includes(path) ? 20000 : 10000);
   try {
     const response = await fetch(`/api/v1${path}`, {
       method: body === undefined ? "GET" : "POST",

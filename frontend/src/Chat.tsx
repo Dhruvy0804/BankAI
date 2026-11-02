@@ -1,8 +1,11 @@
 import { useRef, useState, type FormEvent } from "react";
 import { type Api, type Pending, dateTime, money, label, useAction, useResource } from "./api";
 import { Confirmation, ErrorNotice, ResourceState } from "./components";
+import DemoData from "./DemoData";
+import Voice from "./Voice";
+import Phone from "./Phone";
 
-type Status = { configured: boolean; provider: string; model: string; mode?: "guidance" | "agents" };
+type Status = { configured: boolean; provider: string; model: string; mode?: "guidance" | "agents"; voice_configured?: boolean; phone_configured?: boolean };
 type Conversation = { id: string; title: string; created_at: string };
 type Reply = {
   status: "guidance" | "needs_tools" | "refused" | "answered" | "clarification" | "confirmation_required";
@@ -27,6 +30,7 @@ export default function Chat({ api }: { api: Api }) {
   const status = useResource<Status>(api, "/chat/status");
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState(false);
+  const [phoneBusy, setPhoneBusy] = useState(false);
   const [offset, setOffset] = useState(0);
   const conversations = useResource<Conversation[]>(api, `/chat/conversations?offset=${offset}`);
   const create = useAction();
@@ -50,8 +54,10 @@ export default function Chat({ api }: { api: Api }) {
         )}
       </ResourceState>
       {status.data?.mode === "agents" && <p className="muted">Five-agent assistant · Facts are retrieved from BankSim. Preparing a request does not execute it.</p>}
+      <DemoData api={api} />
+      {status.data?.phone_configured && <Phone api={api} disabled={busy} busyChanged={setPhoneBusy} />}
       <div className="form-actions">
-        <button className="primary" disabled={busy || create.busy} onClick={() => void create.run(async () => {
+        <button className="primary" disabled={busy || phoneBusy || create.busy} onClick={() => void create.run(async () => {
           const conversation = await api<Conversation>("/chat/conversations", {});
           setSelected(conversation.id);
           setOffset(0);
@@ -62,7 +68,7 @@ export default function Chat({ api }: { api: Api }) {
       <ResourceState {...conversations}>
         <label>
           Saved conversations
-          <select aria-label="Saved conversations" disabled={busy || create.busy || conversations.loading}
+          <select aria-label="Saved conversations" disabled={busy || phoneBusy || create.busy || conversations.loading}
             value={active || ""} onChange={(event) => setSelected(event.target.value)}>
             {active && !conversations.data?.some((item) => item.id === active) && (
               <option value={active}>Current conversation</option>
@@ -72,28 +78,29 @@ export default function Chat({ api }: { api: Api }) {
           </select>
         </label>
         <div className="form-actions">
-          <button className="secondary" disabled={busy || conversations.loading || offset === 0} onClick={() => { setSelected(""); setOffset(Math.max(0, offset - 50)); }}>Newer conversations</button>
-          <button className="secondary" disabled={busy || conversations.loading || (conversations.data?.length || 0) < 50} onClick={() => { setSelected(""); setOffset(offset + 50); }}>Older conversations</button>
+          <button className="secondary" disabled={busy || phoneBusy || conversations.loading || offset === 0} onClick={() => { setSelected(""); setOffset(Math.max(0, offset - 50)); }}>Newer conversations</button>
+          <button className="secondary" disabled={busy || phoneBusy || conversations.loading || (conversations.data?.length || 0) < 50} onClick={() => { setSelected(""); setOffset(offset + 50); }}>Older conversations</button>
         </div>
       </ResourceState>
       {active ? <ConversationChat key={active} api={api} id={active}
         configured={status.data?.configured === true} setBusy={setBusy}
-        changed={conversations.reload} />
+        changed={() => { setSelected(active); conversations.reload(); }} voiceEnabled={status.data?.voice_configured === true} phoneBusy={phoneBusy} />
         : <p className="empty-state">Start a conversation to ask a question.</p>}
     </section>
   );
 }
 
-function ConversationChat({ api, id, configured, setBusy, changed }: {
-  api: Api; id: string; configured: boolean; setBusy: (value: boolean) => void; changed: () => void;
+function ConversationChat({ api, id, configured, setBusy, changed, voiceEnabled, phoneBusy }: {
+  api: Api; id: string; configured: boolean; setBusy: (value: boolean) => void; changed: () => void; voiceEnabled: boolean; phoneBusy: boolean;
 }) {
   const detail = useResource<Detail>(api, `/chat/conversations/${id}`);
   const [message, setMessage] = useState("");
   const pending = useRef<{ text: string; id: string } | undefined>(undefined);
   const action = useAction();
+  const [voiceBusy, setVoiceBusy] = useState(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!message.trim() || !configured || action.busy) return;
+    if (!message.trim() || !configured || action.busy || voiceBusy || phoneBusy) return;
     await action.run(async () => {
       setBusy(true);
       try {
@@ -111,6 +118,8 @@ function ConversationChat({ api, id, configured, setBusy, changed }: {
   }
   return (
     <>
+      {voiceEnabled && <Voice api={api} conversationId={id} disabled={action.busy || phoneBusy}
+        changed={() => { detail.reload(); changed(); }} busyChanged={(value) => { setVoiceBusy(value); setBusy(value); }} />}
       <ResourceState {...detail}>
         <div className="chat-transcript" role="log" aria-label="Conversation messages" aria-live="polite">
           {!detail.data?.turns.length && <p>No messages yet.</p>}
@@ -131,7 +140,7 @@ function ConversationChat({ api, id, configured, setBusy, changed }: {
               <p className="muted">Request: {turn.response.request_id}</p>
               <pre className="chat-json">{JSON.stringify(turn.response, null, 2)}</pre>
             </details>
-            {["phase6-blackboard-v1", "phase7-rag-v1"].includes(turn.response.prompt_version || "") && <RunActivity api={api} runId={turn.response.run_id} />}
+            {turn.response.run_id && <RunActivity api={api} runId={turn.response.run_id} />}
             {turn.response.pending_actions?.map((pending) => <PendingChatAction key={pending.id} api={api} pending={pending} />)}
           </article>)}
         </div>
@@ -139,11 +148,13 @@ function ConversationChat({ api, id, configured, setBusy, changed }: {
       <form onSubmit={(event) => void submit(event)}>
         <label htmlFor="chat-message">Your question</label>
         <textarea id="chat-message" value={message} maxLength={2000} rows={3}
-          disabled={action.busy} onChange={(event) => setMessage(event.target.value)} />
+          disabled={action.busy || voiceBusy || phoneBusy} onChange={(event) => setMessage(event.target.value)} />
+        <button type="button" className="secondary" disabled={action.busy || voiceBusy || phoneBusy}
+          onClick={() => setMessage("Check my demo savings account balance, show my card statuses, calculate the monthly EMI for INR 12000 at 12% annual interest over 12 months, and check my existing support ticket. Summarize each verified result. Do not create or change anything.")}>Fill five-agent demo question</button>
         <ErrorNotice error={action.error} />
         <p className="muted">Only the latest 10 exchanges are sent as context. After a connection error, refresh history before changing and resending your question.</p>
         <div className="form-actions">
-          <button className="primary" disabled={!configured || !message.trim() || action.busy || detail.loading || !!detail.error || (detail.data?.turns.length || 0) >= 100}>
+          <button className="primary" disabled={!configured || !message.trim() || action.busy || voiceBusy || phoneBusy || detail.loading || !!detail.error || (detail.data?.turns.length || 0) >= 100}>
             {action.busy ? "Generating…" : "Send message"}
           </button>
           <button type="button" className="secondary" disabled={action.busy} onClick={detail.reload}>Refresh history</button>
@@ -166,19 +177,42 @@ function RunActivity({ api, runId }: { api: Api; runId: string }) {
 function RunTrace({ api, runId }: { api: Api; runId: string }) {
   const trace = useResource<{
     status: string; model_calls: number; tool_calls: number;
+    configuration: { agent_count: number; architecture: string; prompt_strategy: string };
     configured_roles: Record<string, string>;
     events: { id: string; at: string; role: string; kind: string; metadata: unknown }[];
-    artifacts: unknown[];
+    artifacts: { id: string; role: string; revision: number; consumed: string[];
+      summary: { status: string; answer: string }; facts: { tool: string }[] }[];
   }>(api, `/chat/runs/${runId}`);
   return <ResourceState {...trace}>
     {trace.data && <>
-      <p>{trace.data.status} · {trace.data.model_calls} model calls · {trace.data.tool_calls} tool calls</p>
-      <p className="muted">{Object.entries(trace.data.configured_roles).map(([role, framework]) => `${role}: ${framework}`).join(" · ")}</p>
+      <h4>{trace.data.configuration.agent_count}-agent workflow</h4>
+      <p className="muted">{label(trace.data.configuration.architecture)} context · {label(trace.data.configuration.prompt_strategy)} prompts · {trace.data.status} · {trace.data.model_calls} model calls · {trace.data.tool_calls} tool calls</p>
+      <p className="muted">Agents are called when their role is relevant. A configured agent may not be needed for every question.</p>
+      <div className="agent-contributions" aria-label="Agent contributions">
+        {Object.entries(trace.data.configured_roles).map(([role, framework]) => {
+          const artifact = trace.data!.artifacts.find((item) => item.role === role);
+          const started = trace.data!.events.some((event) => event.role === role && event.kind === "agent_start");
+          const consumed = artifact?.consumed.map((id) => trace.data!.artifacts.find((item) => item.id === id)?.role || "prior agent") || [];
+          return <section className="agent-contribution" key={role} aria-label={`${label(role)} agent`}>
+            <h5>{label(role)} <small>· {framework}</small></h5>
+            <p className="muted">{role === "supervisor"
+              ? trace.data!.events.some((event) => event.kind === "guardrail_rejected") ? "Rejected unsafe request"
+                : trace.data!.events.some((event) => event.kind === "output_validated") ? "Coordinated and validated the response"
+                  : "Coordinated the request"
+              : artifact ? `Contributed · ${artifact.summary.status}` : started ? "Started; no verified result" : "Not called for this question"}</p>
+            {artifact && <>
+              <p className="chat-text">{artifact.summary.answer}</p>
+              {!!artifact.facts.length && <p className="muted">Tools: {[...new Set(artifact.facts.map((fact) => label(fact.tool)))].join(", ")}</p>}
+              {!!consumed.length && <p className="muted">Used shared context from: {consumed.map(label).join(", ")}</p>}
+            </>}
+          </section>;
+        })}
+      </div>
       <ol className="agent-timeline" tabIndex={0} aria-label="Agent execution timeline">{trace.data.events.map((event) => <li key={event.id}>
         <strong>{event.role}</strong> · {event.kind.replaceAll("_", " ")}
         <details><summary>Event details</summary><pre className="chat-json">{JSON.stringify(event.metadata, null, 2)}</pre></details>
       </li>)}</ol>
-      <details><summary>Blackboard artifacts</summary><pre className="chat-json">{JSON.stringify(trace.data.artifacts, null, 2)}</pre></details>
+      <details><summary>Verified shared artifacts</summary><pre className="chat-json">{JSON.stringify(trace.data.artifacts, null, 2)}</pre></details>
     </>}
   </ResourceState>;
 }

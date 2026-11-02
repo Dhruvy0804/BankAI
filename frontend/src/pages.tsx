@@ -40,7 +40,7 @@ export function AccountCards({ accounts }: { accounts: Account[] }) {
   );
 }
 
-function TransactionTable({
+export function TransactionTable({
   page,
   accounts = [],
 }: {

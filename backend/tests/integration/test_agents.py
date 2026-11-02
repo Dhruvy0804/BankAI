@@ -338,6 +338,16 @@ def test_adk_crewai_a2a_mcp_and_blackboard_end_to_end(runtime, simulated_models)
     assert client.get("/api/v1/chat/runs/" + str(uuid4())).status_code == 404
 
 
+def test_balance_only_emi_affordability_asks_for_missing_income(runtime, simulated_models):
+    _, _, client, cid, _ = runtime
+    response = send(client, cid, "See my account balance and tell me can I handle the EMI of 2000 per month")
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["status"] == "clarification"
+    assert "DEMO-ACCT-0001: INR 11,825.25" in result["answer"]
+    assert "monthly income and existing monthly obligations" in result["answer"]
+
+
 def test_agent_prepares_but_cannot_confirm_card_block(runtime, simulated_models):
     _, factory, client, cid, _ = runtime
     response = send(client, cid, "Please block my card ending 0001")

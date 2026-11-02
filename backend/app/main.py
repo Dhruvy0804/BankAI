@@ -16,11 +16,15 @@ from sqlalchemy.orm import sessionmaker
 from starlette.exceptions import HTTPException
 
 from app.api.chat import router as chat_router
+from app.api.phone import router as phone_router
 from app.api.routes import router
+from app.api.voice import router as voice_router
 from app.core.config import Settings
 from app.core.errors import APIError
 from app.core.security import LoginLimiter
 from app.services.llm import GeminiProvider
+from app.services.phone import PhoneManager
+from app.services.voice import VoiceManager
 
 
 class HealthResponse(BaseModel):
@@ -65,13 +69,19 @@ def create_app(
             logging.getLogger("bankai").warning(
                 "Authentication disabled: configure APP_SECRET_KEY."
             )
-        protocol_tools = getattr(app.state, "protocol_tools", None)
-        if protocol_tools:
-            async with protocol_tools.session_manager.run():
+        if config.voice_enabled:
+            await app.state.voice.start()
+        try:
+            protocol_tools = getattr(app.state, "protocol_tools", None)
+            if protocol_tools:
+                async with protocol_tools.session_manager.run():
+                    yield
+            else:
                 yield
-        else:
-            yield
-        engine.dispose()
+        finally:
+            await app.state.phone.shutdown()
+            await app.state.voice.shutdown()
+            engine.dispose()
 
     app = FastAPI(
         title="BankAI API",
@@ -87,6 +97,11 @@ def create_app(
     )
     app.state.llm_provider = GeminiProvider(config)
     app.state.agent_slots = BoundedSemaphore(2)
+    app.state.voice = VoiceManager(app.state.session_factory, config)
+    app.state.phone = PhoneManager(app.state.session_factory, config)
+    app.state.voice_limiter = LoginLimiter(
+        attempts=3, message="Too many voice connection attempts. Try again later."
+    )
     if config.chat_mode == "agents":
         from app.agents.protocols import mount_protocols
 
@@ -99,6 +114,8 @@ def create_app(
         allow_headers=["Content-Type", "Authorization"],
         expose_headers=["X-Request-ID"],
     )
+    app.include_router(voice_router)
+    app.include_router(phone_router)
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):

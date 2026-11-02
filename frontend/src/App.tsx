@@ -162,11 +162,13 @@ function About() {
       <p>
         Secure demo login, account and transaction views, confirmed card
         blocking, EMI calculation, simulated loan applications and support
-        tickets, and saved text conversations when a model provider is configured.
+        tickets, five-agent text conversations with policy sources, and browser
+        voice when the required providers are configured. The owner can also
+        configure a Twilio phone test for a selected fictional customer.
       </p>
       <h3>Coming next</h3>
       <p>
-        A five-agent system, grounded policy answers and voice.
+        A verified live telephone demonstration and cloud deployment.
         A private evaluation lab will compare the same tasks across 2, 3 and 5
         total agents, including the supervisor.
       </p>

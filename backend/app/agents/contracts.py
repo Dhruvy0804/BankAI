@@ -5,8 +5,8 @@ from pydantic import Field, JsonValue
 
 from app.schemas import Input
 
-Role = Literal["account", "card", "loan", "support"]
-ROLES = ("account", "card", "loan", "support")
+Role = Literal["account", "card", "loan", "support", "account_card", "loan_support", "generalist"]
+ROLES = ("account", "card", "loan", "support", "account_card", "loan_support", "generalist")
 
 
 class ToolFact(Input):
@@ -37,6 +37,7 @@ class Delegation(Input):
     role: Role
     task: str = Field(min_length=1, max_length=4000)
     consume: list[UUID] = Field(default_factory=list, max_length=4)
+    context: list[Artifact] = Field(default_factory=list, max_length=4)
 
 
 class SupervisorAnswer(Input):

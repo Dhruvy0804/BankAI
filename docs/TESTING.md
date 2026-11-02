@@ -268,3 +268,80 @@ It verifies expandable source excerpts, retrieval traces, desktop/mobile layout
 and absence of browser errors. Screenshots stay in ignored `.artifacts`.
 The frontend citation test also verifies HTML-like excerpts render as plain text.
 No comparative retrieval, cost, prompt or architecture benchmark is claimed.
+
+## Plan 2 Phase 8A verification
+
+From `backend`, the final default suite is **105 passed, 6 opt-in tests skipped**:
+
+```powershell
+$env:BANKAI_RUN_DB_TESTS='1'
+.\.venv\Scripts\python.exe -m pytest -q --disable-warnings
+.\.venv\Scripts\python.exe -m pytest tests/test_speech.py tests/integration/test_voice.py -q
+```
+
+Ordinary voice tests replace RTC and external speech responses but exercise the
+real authenticated banking API and actual ADK/CrewAI/A2A/MCP workflow with mocked
+model responses. They verify room-token grants, ownership, capacity, turn IDs,
+idempotency, interruption, bounds, saved text after TTS failure and provenance.
+Speech tests validate PCM/WAV bounds, silence, verbatim conversion contracts,
+unknown usage, safe failures and confirmation wording. No paid call occurs in
+the default suite. Existing banking and policy checks continue to pass.
+
+With local LiveKit configured/running, opt into a real media transport check:
+
+```powershell
+$env:BANKAI_LIVEKIT_TESTS='1'
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_voice.py::test_real_webrtc_audio_round_trip -q
+```
+
+This publishes synthetic audio through actual LiveKit RTC and validates received
+nonzero answer audio. Speech/model outputs remain mocked; no speech provider
+charges are incurred. It passed independently of the default suite.
+
+Optional real browser media QA, from the project root:
+
+```powershell
+$env:BANKAI_RUN_DB_TESTS='1'
+$env:BANKAI_BROWSER_VOICE_TESTS='1'
+$env:PYTHONPATH=(Resolve-Path '.qa-tools').Path
+cd backend
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_voice.py::test_voice_browser_controls_and_audio -q
+```
+
+Edge receives a generated tone as its fake microphone. Real media and protocol
+traffic execute, while speech and model replies are controlled. It checks mic
+controls, answer audio playback, conversation refresh without disconnect, end,
+desktop/mobile overflow and browser errors. Screenshots are ignored
+`.artifacts/phase8-voice-*.png`. This is not a claim of physical microphone QA.
+
+Separately, live Gemini STT/TTS and agent models handled two spoken EMI enquiries
+with conversation context (12,000 at 12% for 12 months; then the same loan at 0%).
+The calculator returned 1,066.19 and 1,000.00 respectively; both spoken answers,
+saved transcripts, tool receipts and run IDs were verified. Evidence stays in
+ignored `.artifacts/phase8-live-audio.json`. To repeat manually, start the app's
+voice profile as documented in README, sign in, and speak those two questions.
+Provider access and paid/quota-limited conversion are required for this live test.
+
+The Docker voice profile also passed a provider-free media/interrupt test from a
+host RTC participant to the Linux backend worker, with 1,530 ms received before
+discard and no banking action. The frontend's 20 tests, production build,
+dependency checks and backend Docker build passed. Actual telephone calling,
+cloud deployment, speech quality scoring and cost benchmarks remain unverified.
+
+## Plan 2 Phase 8B Twilio tests
+
+With Docker Desktop and the local database running, from `backend`:
+
+```powershell
+$env:BANKAI_RUN_DB_TESTS='1'
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_phone.py -q
+```
+
+The provider-free integration tests replace only the Twilio REST boundary. They
+exercise owner/allowlist checks, consent, signed callbacks, call identity,
+duplicate question handling, persistent phone events, and a saved answer through
+the real ADK/CrewAI/A2A/MCP banking runtime with controlled model responses.
+No phone number is dialed by these tests. A live trial call to the agreed and
+Twilio-verified recipient through a public HTTPS backend remains the acceptance
+check for Phase 8B. Record actual call duration, Twilio usage/cost and failures
+after that test; do not infer them from provider-free tests.

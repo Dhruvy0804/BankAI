@@ -75,3 +75,5 @@ class ChatStatus(Output):
     banking_actions_enabled: bool = False
     mode: Literal["guidance", "agents"] = "guidance"
     configured_agent_count: Literal[0, 5] = 0
+    voice_configured: bool = False
+    phone_configured: bool = False

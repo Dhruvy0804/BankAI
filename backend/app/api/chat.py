@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query, Request
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 
+from app.agents.configuration import AgentConfiguration
 from app.api.deps import DB, Actor
 from app.chat_schemas import (
     ChatInput,
@@ -50,6 +51,8 @@ def status(request: Request, customer: Actor):
         mode=settings.chat_mode,
         configured_agent_count=5 if settings.chat_mode == "agents" else 0,
         banking_actions_enabled=settings.chat_mode == "agents",
+        voice_configured=settings.voice_configured,
+        phone_configured=settings.phone_configured and str(customer.id) == settings.phone_owner_customer_id,
     )
 
 
@@ -227,16 +230,14 @@ def run_trace(run_id: UUID, db: DB, customer: Actor):
     )
     if run is None:
         raise APIError(404, "NOT_FOUND", "Agent run not found.")
+    configuration = AgentConfiguration.model_validate(run.configuration)
     return {
         "run_id": run.id,
         "request_id": run.request_id,
         "status": run.status,
-        "configured_roles": {
-            "supervisor": "Google ADK",
-            "account": "CrewAI",
-            "card": "CrewAI",
-            "loan": "CrewAI",
-            "support": "CrewAI",
+        "configuration": configuration.model_dump(),
+        "configured_roles": {"supervisor": "Google ADK"} | {
+            role: "CrewAI" for role in configuration.roles
         },
         "model": run.model,
         "revision": run.revision,

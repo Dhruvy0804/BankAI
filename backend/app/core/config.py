@@ -32,6 +32,84 @@ class Settings(BaseSettings):
     embedding_provider: Literal["", "gemini"] = ""
     embedding_api_key: SecretStr | None = None
     embedding_model: Literal["", "gemini-embedding-001"] = ""
+    voice_enabled: bool = False
+    livekit_url: str = ""
+    livekit_internal_url: str = ""
+    livekit_api_key: SecretStr | None = None
+    livekit_api_secret: SecretStr | None = None
+    stt_provider: Literal["", "gemini"] = ""
+    stt_api_key: SecretStr | None = None
+    stt_model: Literal["gemini-3.5-transcribe"] = "gemini-3.5-transcribe"
+    tts_provider: Literal["", "gemini"] = ""
+    tts_api_key: SecretStr | None = None
+    tts_model: Literal["gemini-3.8-flash-lite-tts"] = "gemini-3.8-flash-lite-tts"
+    phone_enabled: bool = False
+    phone_owner_customer_id: str = ""
+    phone_allowed_numbers: str = ""
+    phone_caller_number: str = ""
+    phone_public_base_url: str = ""
+    phone_max_duration_seconds: int = Field(default=300, ge=60, le=300)
+    twilio_account_sid: SecretStr | None = None
+    twilio_auth_token: SecretStr | None = None
+
+    @property
+    def phone_configured(self) -> bool:
+        import re
+        from urllib.parse import urlsplit
+
+        url = urlsplit(self.phone_public_base_url)
+        allowed = [n.strip() for n in self.phone_allowed_numbers.split(",") if n.strip()]
+        return bool(
+            self.phone_enabled
+            and self.chat_mode == "agents"
+            and self.llm_configured
+            and re.fullmatch(r"[0-9a-fA-F-]{36}", self.phone_owner_customer_id)
+            and allowed
+            and all(re.fullmatch(r"\+[1-9]\d{7,14}", n) for n in allowed)
+            and re.fullmatch(r"\+[1-9]\d{7,14}", self.phone_caller_number)
+            and url.scheme == "https"
+            and url.hostname
+            and not (url.username or url.password or url.query or url.fragment or url.path not in ("", "/"))
+            and self.twilio_account_sid
+            and re.fullmatch(r"AC[0-9a-fA-F]{32}", self.twilio_account_sid.get_secret_value())
+            and self.twilio_auth_token
+            and self.twilio_auth_token.get_secret_value().strip()
+        )
+
+    @field_validator("livekit_url", "livekit_internal_url")
+    @classmethod
+    def livekit_endpoint(cls, value):
+        from urllib.parse import urlsplit
+
+        if not value:
+            return value
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme not in ("ws", "wss")
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or parsed.path not in ("", "/")
+        ):
+            raise ValueError("LiveKit URL must be a ws/wss origin without credentials")
+        return value.rstrip("/")
+
+    @property
+    def voice_configured(self) -> bool:
+        return bool(
+            self.voice_enabled
+            and self.chat_mode == "agents"
+            and self.llm_configured
+            and self.livekit_url
+            and self.livekit_api_key
+            and self.livekit_api_secret
+            and self.stt_provider == "gemini"
+            and self.tts_provider == "gemini"
+            and (self.stt_api_key or self.llm_api_key)
+            and (self.tts_api_key or self.llm_api_key)
+        )
 
     @property
     def embedding_key(self) -> SecretStr | None:

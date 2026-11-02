@@ -85,6 +85,9 @@ PERMISSIONS = {
     "loan": {"calculate_emi", "loan_eligibility", "prepare_loan_application", "loan_snapshot"},
     "support": {"support_tickets", "create_support_ticket", "search_policies"},
 }
+PERMISSIONS["account_card"] = PERMISSIONS["account"] | PERMISSIONS["card"]
+PERMISSIONS["loan_support"] = PERMISSIONS["loan"] | PERMISSIONS["support"]
+PERMISSIONS["generalist"] = PERMISSIONS["account_card"] | PERMISSIONS["loan_support"]
 
 
 def execute_tool(factory, settings, name, arguments):

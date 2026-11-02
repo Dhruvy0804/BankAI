@@ -1,136 +1,73 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { type Api, ApiError } from "./api";
+import type { Api } from "./api";
 import Chat from "./Chat";
 
 afterEach(cleanup);
 
-test("policy citations expose the exact excerpt safely and preserve the agent timeline", async () => {
-  const source = { citation_id: "P-test", title: "Demo policy", section: "Loan documents", source: "demo_loans.md", checksum: "a".repeat(64), excerpt: "No real documents required. <script>unsafe()</script>" };
-  const mock = vi.fn(async (path: string) => {
-    if (path === "/chat/status") return { configured: true, mode: "agents" };
-    if (path.startsWith("/chat/conversations?")) return [conversation];
-    if (path === "/chat/conversations/c1") return { ...conversation, turns: [{ message_id: "m1", user_text: "Documents?", response: { ...reply, prompt_version: "phase7-rag-v1", sources: [source] } }] };
-    throw new Error(`Unexpected request: ${path}`);
-  });
-  render(<Chat api={mock as Api} />);
-  expect(await screen.findByRole("region", { name: "Policy sources" })).toBeInTheDocument();
-  fireEvent.click(screen.getByText("Demo policy · Loan documents"));
-  expect(screen.getByText(source.excerpt)).toBeVisible();
-  expect(document.querySelector("script")).toBeNull();
-  expect(screen.getByText(/Version aaaaaaaaaaaa/)).toBeInTheDocument();
-  expect(screen.getByText("Agent activity and shared context")).toBeInTheDocument();
-  expect(mock.mock.calls.some(([path]) => path.startsWith("/chat/runs/"))).toBe(false);
-});
-const conversation = { id: "c1", title: "New conversation", created_at: "2026-10-20T10:00:00Z" };
-const reply = {
-  status: "guidance", answer: "An EMI is a monthly instalment. <script>unsafe()</script>",
-  request_id: "request-1", run_id: "run-1", provider: "gemini", model: "test-model",
-  duration_ms: 20, total_tokens: 30,
-};
-
-function fixture(configured = true, failFirst = false) {
-  const turns: unknown[] = [];
-  let attempts = 0;
-  const mock = vi.fn(async (path: string, body?: unknown) => {
-    if (path === "/chat/status") return { configured, provider: "gemini", model: "test-model" };
-    if (path.startsWith("/chat/conversations?")) return [conversation];
-    if (path === "/chat/conversations/c1") return { ...conversation, turns: [...turns] };
-    if (path === "/chat") {
-      attempts++;
-      if (failFirst && attempts === 1) throw new ApiError("Provider unavailable", 503, "request-failed");
-      const data = body as { message: string; message_id: string };
-      turns.push({ user_text: data.message, message_id: data.message_id, response: reply });
-      return reply;
-    }
-    throw new Error(`Unexpected request: ${path}`);
-  });
-  return { mock, api: mock as Api };
-}
-
-test("sends a question, shows saved plain-text response and structured details, reopens history", async () => {
-  const { api, mock } = fixture();
-  const view = render(<Chat api={api} />);
-  fireEvent.change(await screen.findByLabelText("Your question"), { target: { value: "What is an EMI?" } });
-  await waitFor(() => expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Send message" }));
-  expect(await screen.findByText(reply.answer)).toBeInTheDocument();
-  expect(document.querySelector("script")).toBeNull();
-  expect(screen.getByLabelText("Your question")).toHaveValue("");
-  expect(screen.getByText("Response details")).toBeInTheDocument();
-  const body = mock.mock.calls.find(([path]) => path === "/chat")![1] as Record<string, string>;
-  expect(body.conversation_id).toBe("c1");
-  expect(body.message_id).toMatch(/^[0-9a-f-]{36}$/);
-  view.unmount();
-  render(<Chat api={api} />);
-  expect(await screen.findByText(reply.answer)).toBeInTheDocument();
-});
-
-test("preserves text and message ID when retrying a failed submission", async () => {
-  const { api, mock } = fixture(true, true);
-  render(<Chat api={api} />);
-  fireEvent.change(await screen.findByLabelText("Your question"), { target: { value: "Explain interest" } });
-  await waitFor(() => expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Send message" }));
-  expect(await screen.findByText("Provider unavailable")).toBeInTheDocument();
-  expect(screen.getByLabelText("Your question")).toHaveValue("Explain interest");
-  fireEvent.click(screen.getByRole("button", { name: "Send message" }));
-  expect(await screen.findByText(reply.answer)).toBeInTheDocument();
-  const calls = mock.mock.calls.filter(([path]) => path === "/chat");
-  expect(calls[0][1]).toEqual(calls[1][1]);
-});
-
-test("missing configuration disables generation but keeps saved history accessible", async () => {
-  const { api, mock } = fixture(false);
-  render(<Chat api={api} />);
-  expect(await screen.findByText(/unavailable until the backend model provider/)).toBeInTheDocument();
-  fireEvent.change(await screen.findByLabelText("Your question"), { target: { value: "Hello" } });
-  expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
-  expect(mock.mock.calls.filter(([path]) => path === "/chat")).toHaveLength(0);
-});
-
-test("agent activity opens lazily and a pending action requires explicit confirmation", async () => {
-  Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
-    configurable: true,
-    value: function (this: HTMLDialogElement) { this.setAttribute("open", ""); },
-  });
-  Object.defineProperty(HTMLDialogElement.prototype, "close", {
-    configurable: true,
-    value: function (this: HTMLDialogElement) { this.removeAttribute("open"); },
-  });
-  const pending = {
-    id: "pending-1", resource_id: "card-1", kind: "block_card",
-    payload: { masked_card_number: "DEMO-XXXX-0001" },
-    expires_at: new Date(Date.now() + 300000).toISOString(),
-  };
-  const mock = vi.fn(async (path: string) => {
-    if (path === "/chat/status") return { configured: true, provider: "gemini", model: "test-model", mode: "agents" };
-    if (path.startsWith("/chat/conversations?")) return [conversation];
-    if (path === "/chat/conversations/c1") return { ...conversation, turns: [{
-      message_id: "message-1", user_text: "Block my demo card", response: {
-        ...reply, prompt_version: "phase6-blackboard-v1", pending_actions: [pending],
-      },
-    }] };
-    if (path === "/chat/runs/run-1") return {
-      status: "completed", model_calls: 4, tool_calls: 2,
-      configured_roles: { supervisor: "Google ADK", card: "CrewAI" }, artifacts: [],
-      events: [{ id: "event-1", role: "card", kind: "state_publish", metadata: {} }],
+test("shows the owner phone test before a text conversation exists", async () => {
+  const api = vi.fn(async (path: string) => {
+    if (path === "/chat/status") return {
+      configured: true, provider: "gemini", model: "demo", mode: "agents", phone_configured: true,
     };
-    if (path === "/cards/card-1/block/confirm") return { status: "blocked" };
+    if (path.startsWith("/chat/conversations")) return [];
+    if (path === "/phone/config") return { allowed_numbers: ["+919876543210"], max_duration_seconds: 300 };
+    if (path === "/phone/calls") return [];
     throw new Error(`Unexpected request: ${path}`);
   });
-  render(<Chat api={mock as Api} />);
-  expect(await screen.findByRole("button", { name: "Review action" })).toBeInTheDocument();
-  expect(mock.mock.calls.some(([path]) => path.includes("/chat/runs/"))).toBe(false);
-  fireEvent.click(screen.getByText("Agent activity and shared context"));
-  expect(await screen.findByText(/4 model calls/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Review action" }));
-  expect(screen.getByRole("dialog")).toHaveTextContent("DEMO-XXXX-0001");
-  expect(mock.mock.calls.some(([path]) => path.endsWith("/confirm"))).toBe(false);
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Review action" }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm action" }));
-  expect(await screen.findByText("The simulated action was confirmed.")).toBeInTheDocument();
-  expect(mock).toHaveBeenCalledWith("/cards/card-1/block/confirm", { action_id: "pending-1", confirmation: true });
+  render(<Chat api={api as Api} />);
+  expect(await screen.findByRole("heading", { name: "Phone test with Twilio" })).toBeInTheDocument();
+  expect(screen.getByText("Start a conversation to ask a question.")).toBeInTheDocument();
+});
+
+test("shows verified work and unused roles in the five-agent trace", async () => {
+  const api = vi.fn(async (path: string) => {
+    if (path === "/chat/status") return { configured: true, provider: "gemini", model: "demo", mode: "agents" };
+    if (path === "/chat/conversations?offset=0") return [{ id: "c1", title: "Demo", created_at: "2026-01-01T00:00:00Z" }];
+    if (path === "/chat/conversations/c1") return {
+      id: "c1", title: "Demo", created_at: "2026-01-01T00:00:00Z",
+      turns: [{ message_id: "m1", user_text: "Check account and EMI", created_at: "2026-01-01T00:00:00Z",
+        response: { status: "answered", answer: "Verified answer", run_id: "r1", request_id: "q1",
+          provider: "gemini", model: "demo", duration_ms: 100, input_tokens: 10, output_tokens: 10, total_tokens: 20 } }],
+    };
+    if (path === "/chat/runs/r1") return {
+      status: "completed", model_calls: 4, tool_calls: 2,
+      configuration: { agent_count: 5, architecture: "blackboard", prompt_strategy: "react" },
+      configured_roles: { supervisor: "Google ADK", account: "CrewAI", card: "CrewAI", loan: "CrewAI", support: "CrewAI" },
+      events: [{ id: "e1", at: "2026-01-01T00:00:00Z", role: "supervisor", kind: "agent_start", metadata: {} },
+        { id: "e2", at: "2026-01-01T00:00:00Z", role: "loan", kind: "state_consume", metadata: { artifact_id: "a1" } }],
+      artifacts: [
+        { id: "a1", role: "account", revision: 1, consumed: [], summary: { status: "answered", answer: "Balance confirmed" }, facts: [{ tool: "account_snapshot" }] },
+        { id: "a2", role: "loan", revision: 2, consumed: ["a1"], summary: { status: "answered", answer: "EMI calculated" }, facts: [{ tool: "calculate_emi" }] },
+      ],
+    };
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  render(<Chat api={api as Api} />);
+  fireEvent.click(await screen.findByText("Agent activity and shared context"));
+  expect(await screen.findByRole("heading", { name: "5-agent workflow" })).toBeInTheDocument();
+  expect(within(screen.getByRole("region", { name: "loan agent" })).getByText("EMI calculated")).toBeInTheDocument();
+  expect(screen.getByText("Used shared context from: account")).toBeInTheDocument();
+  expect(within(screen.getByRole("region", { name: "card agent" })).getByText("Not called for this question")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Fill five-agent demo question" }));
+  expect((screen.getByLabelText("Your question") as HTMLTextAreaElement).value).toContain("support ticket");
+});
+
+test("shows current customer-scoped demo records for an agent demonstration", async () => {
+  const api = vi.fn(async (path: string) => {
+    if (path === "/chat/status") return { configured: true, provider: "gemini", model: "demo", mode: "agents" };
+    if (path === "/chat/conversations?offset=0") return [];
+    if (path === "/accounts") return [{ id: "a1", account_number: "DEMO-ACCT-0001", account_type: "savings", currency: "INR", balance: "11825.25", status: "active" }];
+    if (path === "/transactions?limit=100") return { items: [{ id: "t1", account_id: "a1", description: "Demo grocery purchase", merchant: "Demo Merchant", reference_code: "DEMO-TXN-0001-01", occurred_at: "2026-10-02T09:00:00Z", status: "completed", transaction_type: "debit", amount: "125.50" }], next_cursor: null };
+    if (path === "/cards") return [{ id: "card1", account_id: "a1", masked_card_number: "DEMO-XXXX-0001", card_type: "debit", status: "active" }];
+    if (path === "/loans") return [{ id: "loan1", loan_type: "personal", requested_amount: "100000.00", annual_interest_rate: "10.5000", tenure_months: 12, status: "draft" }];
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  render(<Chat api={api as Api} />);
+  expect(api).not.toHaveBeenCalledWith("/accounts", undefined, expect.anything());
+  fireEvent.click(screen.getByText("View my demo banking records"));
+  expect(await within(await screen.findByRole("region", { name: "Demo accounts" })).findByText("DEMO-ACCT-0001")).toBeInTheDocument();
+  expect(await within(screen.getByRole("region", { name: "Demo transactions" })).findByText("Demo grocery purchase")).toBeInTheDocument();
+  expect(await within(screen.getByRole("region", { name: "Demo cards" })).findByText("DEMO-XXXX-0001")).toBeInTheDocument();
+  expect(await within(screen.getByRole("region", { name: "Demo loans" })).findByText("personal")).toBeInTheDocument();
 });

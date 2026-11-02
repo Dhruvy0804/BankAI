@@ -1,6 +1,6 @@
 # Implementation status
 
-Updated: 2026-10-21. Active implementation: `BankAI_Implementation_Plan_2.md`.
+Updated: 2026-11-02. Active implementation: `BankAI_Implementation_Plan_2.md`.
 Original implementation-plan documents remain preserved; phased delivery.
 
 | Phase | Status |
@@ -15,14 +15,158 @@ Original implementation-plan documents remain preserved; phased delivery.
 | 6B: MCP banking tools | Complete; 10 scoped tools, real protocol calls and validation checks passed |
 | 6C: Main five-agent system | Complete locally; live five-role workflow, protected actions, callbacks, trace UI and Docker verified |
 | 7: RAG | Complete locally; approved corpus, embeddings, MCP retrieval, validated citations, live answers and desktop/mobile checks passed |
-| 8A: Browser voice; 8B: actual outbound telephone calling | Not started |
-| 9A–9C: Evaluation engine, web dashboard and benchmark | Not started |
+| 8A: Browser voice | Implemented and locally verified with live two-turn audio, real WebRTC, browser controls and Docker transport |
+| 8B: Actual outbound telephone calling | Deferred at user request; Twilio local integration and provider-free tests passed, real approved call and cost evidence pending |
+| 9A: Evaluation runtime | In progress; 2/3/5 roles, Blackboard/direct context, ReAct/few-shot prompts, a seven-case pilot manifest and an isolated opt-in runner are locally tested |
+| 9B–9C: Evaluation web dashboard and benchmark readiness | Not started |
 | 10: Final deployment/demo verification | Not started |
+
+## Plan 2 Phase 9A: evaluation runtime checkpoint
+
+Phase 9A began while the user deferred Phase 8B's live-call exit check. A typed
+per-run configuration selects 2, 3 or 5 total agents, including the ADK
+supervisor. The CrewAI specialists are generalist (2), account/card plus
+loan/support (3), or the original four specialists (5). The role set is stored
+on each run and enforced at the authenticated A2A boundary; merged specialists
+inherit only the existing role tool permissions. The production text assistant
+still defaults to its five-agent Blackboard configuration.
+
+Blackboard mode passes validated artifact IDs for downstream state reads. Direct
+mode serializes those same typed artifacts into the A2A task message; the
+receiving specialist validates the message against owned persisted records
+before using it. Events distinguish `state_consume` from `message_consume`.
+Both modes continue to use real ADK-to-CrewAI A2A delegation, MCP banking tools,
+Pydantic contracts, callbacks, confirmation rules and run budgets.
+
+The evaluation configuration also selects tool-oriented/ReAct instructions or
+fixed few-shot examples. Prompt version/hash, agent count, architecture, role
+set, model and framework versions are recorded in the run-start event.
+Migration `0008` stores the authorized configuration; it is applied to the
+local database. Provider-free integration tests exercised 2/direct/few-shot,
+3/direct/ReAct, 5/direct/ReAct and 5/Blackboard/few-shot through the real
+framework, A2A, MCP and PostgreSQL boundaries. The full backend suite passed
+**114 tests, 6 opt-in skips**; Ruff passed.
+
+A versioned seven-case pilot now covers each planned scenario category. Its
+five cells compare 2/3/5 agents, Blackboard/direct messaging, and ReAct/few-shot
+prompts. The deterministic runner prints the manifest by default; an explicit
+live invocation selects one case and optionally one cell. Each attempt uses a
+fresh synthetic PostgreSQL schema, real ADK/CrewAI A2A and MCP paths, saved
+events and a receipt-based preliminary score, then removes the schema. One
+provider-free isolated attempt passed. The score checks expected status, tool
+receipts, selected facts, sources and context consumption, and always flags
+answer quality for human review. The runner has not made a provider call.
+The cross-domain pilot is one turn; genuine multi-turn context tests and
+policy-corpus preparation are part of the remaining full fixture work.
+
+This is an implementation checkpoint, not Phase 9A completion. The full 60
+fixed scenarios, persistent repeatable jobs, human review workflow, budgeted
+real-provider pilot, owner-only dashboard, exports and 900-run final study
+remain. No provider-backed benchmark or cost comparison is claimed.
+
+## Plan 2 Phase 8A: browser voice
+
+Implemented on `plan2-phase8`; not committed or pushed. The existing user-edited
+Word abstract is left untouched. Phase 8B uses Twilio Programmable Voice;
+it does not use a LiveKit SIP trunk. Browser speech
+uses the already configured Gemini key, not a Sarvam account.
+
+The chat UI now supports explicit microphone turns over LiveKit, spoken answers,
+stop/discard, end-session and a speaker-unlock control for autoplay restrictions.
+The microphone is muted outside recording and stopped when leaving; late
+connection responses cannot activate it after unmount. Voice answers reuse the
+same authenticated chat API, history, Blackboard, A2A/MCP, citations and protected
+action dialogs. Saying yes does not confirm an action. No additional autonomous
+agent or LiveKit Agents framework is used.
+
+Migration `0006` adds owner-scoped voice sessions/events and is applied locally.
+Short-lived room tokens restrict identities, room and microphone publication;
+the worker accepts only the bound browser identity. Customer API tokens remain
+in worker memory. No customer audio recordings are persisted. Events link
+speech model/usage/duration/errors and interruptions to the banking run ID;
+transcripts and validated answers remain in the owned chat conversation.
+
+Bounds: one API process, two active voice sessions, one per customer, five minutes,
+eight question IDs and 30 seconds per recording. Repeated submissions do not
+start another turn. No automatic reconnect/replay; disconnect, shutdown, expiry,
+permission failures and stale startup sessions close safely. Interruption drops
+buffered audio and suppresses further playback. An already submitted banking or
+provider request can still finish and be billed; the text answer may appear later.
+
+Tested dependencies: livekit 1.1.21, livekit-api 1.2.2, livekit-client 2.18.0,
+local server 1.13.10. Dedicated `gemini-3.5-transcribe` uses verbatim transcription;
+`gemini-3.8-flash-lite-tts` reads validated answer text. Direct provider SDKs are
+speech conversion tools, not extra agent roles. Optional Docker profile `voice`
+and a local development server configuration are included; secrets stay ignored.
+
+Verification:
+
+- Final default backend suite: **105 passed, 6 opt-in tests skipped**; database
+  migration roundtrip/model consistency passed. Ruff and pip dependency checks passed.
+- Frontend: **20 tests passed**, TypeScript and production build passed. Includes
+  microphone denial, controlled turns, unmount cleanup and late join cleanup.
+- Real WebRTC tone round trip passed with actual SDK/server audio frames and a
+  nonzero received signal, while banking/speech provider outputs were mocked.
+- Edge desktop/mobile used a synthetic microphone and real LiveKit media with
+  deterministic provider outputs. Recording/send, returned audio playback,
+  persistence after answer refresh, end-session and no overflow/browser errors passed.
+- A separate live provider test sent two generated speech questions through
+  actual RTC, STT, the five-agent banking backend and TTS. It returned EMI
+  **INR 1,066.19**, then used conversation context to calculate **INR 1,000.00**
+  at zero interest. Both were answered with verified calculator receipts and no
+  speech errors. Evidence: ignored `.artifacts/phase8-live-audio.json`.
+- Docker built and started backend/frontend/LiveKit/database. A provider-free
+  cross-container transport test received and discarded **1,530 ms** of browser
+  participant audio, verified interrupt and cleanup, and made no speech/model
+  calls. Evidence: ignored `.artifacts/phase8-docker.json`.
+
+Live testing fixed an unsupported transcription schema request by using the
+dedicated transcription API. It also exposed a specialist final-format failure:
+tool execution succeeded but no usable artifact was produced. Specialist output
+instructions now explicitly name the allowed fields/status values and examples;
+validation events record field/type codes without model text. Both live banking
+turns subsequently passed. A conversation refresh that unmounted voice after an
+answer was fixed by retaining the active selection before refreshing the list.
+
+Limits: explicit turn controls, not automatic voice activity detection; synthetic
+microphone/generated-speech testing does not certify every physical microphone
+or noisy environment. Provider and multi-agent latency can be noticeable. Speech
+and banking usage are separate, with unknown usage left null; costs/quality are
+not a completed voice benchmark. Local Docker media needs a reachable host LAN
+IP and ports; cloud hosting and multi-process workers remain later work. Sarvam
+speech adapters and a verified real telephone conversation are still pending.
+
+## Plan 2 Phase 8B: Twilio integration checkpoint
+
+The owner-only Phone test panel and `/api/v1/phone` API use Twilio Programmable
+Voice. Migration `0007` persists masked call records and sanitized status/events.
+The configured owner is a separate non-seeded customer ID. Each call selects one
+of the three seeded fictional customers, and only the owner can dial or inspect
+the phone transcript. The API permits only allowlisted E.164 destinations after
+the owner asserts recipient agreement.
+Twilio's initial spoken prompt requires a DTMF 1 consent before any demo account
+question reaches the shared five-agent chat. The provider callback verifies the
+Twilio HMAC signature and account/call IDs; duplicate question steps cannot launch
+a second banking run. Calls are limited to one active, two attempts per UTC day,
+three questions, and five minutes. Audio recording and automatic redial are off.
+Sensitive simulated actions still require web confirmation.
+
+The Twilio credentials and public HTTPS callback were verified, but the trial
+account returned HTTP 400 on its first outbound call request. The current
+trial Call API only accepts Twilio sample URLs, while BankAI requires a custom
+webhook for the five-agent conversation. No PSTN call connected; call cost and
+speech quality remain unmeasured. The 8B exit gate remains open until an account
+that permits custom instructions completes a consented end-to-end call.
+
+The latest local regression run passed **108 backend tests** with six opt-in
+tests skipped and **21 frontend tests**. Frontend production build and Ruff
+passed. The three new phone integration tests use a fake Twilio REST boundary;
+no real number was dialed.
 
 ## Plan 2 Phase 7: fictional policy retrieval
 
-Implemented on `plan2-phase7` and included in this Git checkpoint. Next phase:
-**8A, browser voice**. The Word abstract and original implementation plans are
+Implemented on `plan2-phase7` and published in checkpoint `1ab977b`. At that point,
+**8A, browser voice** was next. The Word abstract and original implementation plans are
 preserved; no banking records are reset.
 
 Three approved Markdown documents provide ten bounded, named citation sections.

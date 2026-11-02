@@ -260,6 +260,10 @@ class AgentRun(IdentityMixin, CreatedMixin, Base):
     conversation_id: Mapped[UUID] = mapped_column(ForeignKey("conversations.id"), index=True)
     request_id: Mapped[str] = mapped_column(String(64))
     model: Mapped[str] = mapped_column(String(120))
+    configuration: Mapped[dict] = mapped_column(
+        JSONB,
+        default=lambda: {"agent_count": 5, "architecture": "blackboard", "prompt_strategy": "react"},
+    )
     status: Mapped[str] = mapped_column(String(12), default="running")
     revision: Mapped[int] = mapped_column(Integer, default=0)
     model_calls: Mapped[int] = mapped_column(Integer, default=0)
@@ -288,5 +292,40 @@ class AgentEvent(IdentityMixin, CreatedMixin, Base):
     sequence: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True)
     run_id: Mapped[UUID] = mapped_column(ForeignKey("agent_runs.id"), index=True)
     role: Mapped[str] = mapped_column(String(16))
+    kind: Mapped[str] = mapped_column(String(40))
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
+class VoiceSession(IdentityMixin, CreatedMixin, Base):
+    __tablename__ = "voice_sessions"
+    customer_id: Mapped[UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    conversation_id: Mapped[UUID] = mapped_column(ForeignKey("conversations.id"), index=True)
+    status: Mapped[str] = mapped_column(String(16), default="connecting")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class VoiceEvent(IdentityMixin, CreatedMixin, Base):
+    __tablename__ = "voice_events"
+    session_id: Mapped[UUID] = mapped_column(ForeignKey("voice_sessions.id"), index=True)
+    run_id: Mapped[UUID | None] = mapped_column(ForeignKey("agent_runs.id"))
+    kind: Mapped[str] = mapped_column(String(40))
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
+class PhoneCall(IdentityMixin, CreatedMixin, Base):
+    __tablename__ = "phone_calls"
+    customer_id: Mapped[UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    conversation_id: Mapped[UUID] = mapped_column(ForeignKey("conversations.id"))
+    demo_customer: Mapped[str] = mapped_column(String(12))
+    destination_hint: Mapped[str] = mapped_column(String(8))
+    provider_sid: Mapped[str | None] = mapped_column(String(34), unique=True)
+    status: Mapped[str] = mapped_column(String(24), default="dialing")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PhoneEvent(IdentityMixin, CreatedMixin, Base):
+    __tablename__ = "phone_events"
+    call_id: Mapped[UUID] = mapped_column(ForeignKey("phone_calls.id"), index=True)
+    run_id: Mapped[UUID | None] = mapped_column(ForeignKey("agent_runs.id"))
     kind: Mapped[str] = mapped_column(String(40))
     payload: Mapped[dict] = mapped_column(JSONB, default=dict)

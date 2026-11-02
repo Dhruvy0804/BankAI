@@ -6,20 +6,21 @@ variants: **2, 3, and 5 total agents**, using the same banking capabilities.
 
 ## Current checkpoint
 
-Phases 0–7: a working local banking web application with JWT login,
+Phases 0–7 and 8A: a working local banking web application with JWT login,
 dashboard, accounts, filtered transactions, cards, demo loans and support.
 It uses the seeded PostgreSQL records and confirmed banking APIs.
 Plan 2 Phase 5 now adds authenticated text chat, saved conversations, and a
 direct Gemini SDK adapter with Pydantic responses. Live model verification passed
 with the configured local provider. Phase 6 adds an ADK supervisor, four CrewAI
 specialists, A2A, MCP tools and a shared PostgreSQL Blackboard. Phase 7 adds
-fictional policy retrieval and validated source citations. Voice and evaluation
-execution remain later phases. Active implementation follows
+fictional policy retrieval and validated source citations. Phase 8A adds browser
+voice through LiveKit and dedicated speech conversion. Phase 8B now includes a
+local Twilio phone-test integration; an actual call has not yet been verified.
+Evaluation execution remains later work. Active implementation follows
 [Implementation Plan 2](BankAI_Implementation_Plan_2.md); the original plans are preserved.
-Phase 8 includes browser voice and actual outbound phone testing: the owner
-starts an approved call and the professor/recipient speaks with BankAI on
-their phone. This is planned, not implemented. Telephone credentials, an
-appropriate provider/caller number and a call budget will be required.
+The phone test lets the configured owner start an approved call so the
+professor/recipient can speak with BankAI on a normal phone. Twilio credentials,
+a public HTTPS callback and a live approved test are required to complete 8B.
 See [implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 ## Text assistant setup (Plan 2 Phase 5)
@@ -223,6 +224,134 @@ or confirmation rules. Displayed token totals count generative model tokens;
 embedding usage is recorded separately in retrieval/tool events when available,
 otherwise `null`. No embedding cost or benchmark result is fabricated.
 
+## Browser voice (Plan 2 Phase 8A)
+
+Voice is another channel for the existing five banking agents; no LiveKit Agents
+framework or additional banking agent is introduced. The raw LiveKit RTC/API
+SDKs carry microphone and answer audio. Dedicated Gemini models perform verbatim
+transcription and read the validated banking response aloud. Speech conversion
+has no banking tools or authority. The same authenticated `/chat` endpoint saves
+transcripts, answers, sources, pending actions and run traces.
+
+Configure the ignored backend `.env`, then restart the backend:
+
+```dotenv
+VOICE_ENABLED=true
+CHAT_MODE=agents
+LIVEKIT_URL=ws://localhost:7880
+LIVEKIT_INTERNAL_URL=ws://livekit:7880
+LIVEKIT_NODE_IP=your-host-LAN-IPv4
+LIVEKIT_API_KEY=your-local-or-cloud-key
+LIVEKIT_API_SECRET=your-local-or-cloud-secret
+STT_PROVIDER=gemini
+STT_API_KEY=
+STT_MODEL=gemini-3.5-transcribe
+TTS_PROVIDER=gemini
+TTS_API_KEY=
+TTS_MODEL=gemini-3.8-flash-lite-tts
+```
+
+Blank speech keys reuse `LLM_API_KEY` on the backend. Generate a random local
+LiveKit secret (for example `python -c "import secrets; print(secrets.token_urlsafe(32))"`);
+never commit it. For LiveKit Cloud, use the project's `wss://` URL for both URL
+settings and skip the local LiveKit container. These credentials are different
+from the Google key. No service signup or paid subscription is created by setup.
+
+For the local Docker transport, set NODE_IP to the host IPv4 reachable from both
+the browser and Docker (PowerShell `Get-NetIPConfiguration`). The local profile
+maps media TCP 7881 and UDP 7882, while signaling 7880 is loopback-only. Update
+NODE_IP after changing networks. This local development profile is not a cloud
+deployment; use a properly secured LiveKit host or Cloud for remote users.
+
+```powershell
+docker compose build backend frontend
+docker compose --profile voice up -d db livekit
+docker compose run --rm --no-deps backend python -m alembic upgrade head
+docker compose --profile voice up -d
+```
+
+Apply migration `0006` before enabling voice on an existing deployment. If running
+the backend directly on Windows rather than Docker, use
+`LIVEKIT_INTERNAL_URL=ws://localhost:7880`. API startup closes stale database
+voice sessions; the current implementation supports one API process, two active
+voice sessions globally and one per customer. No old session recording resumes.
+
+Sign in, open **Text assistant**, and select or start a conversation. Click
+**Start browser voice**, allow microphone access, then **Speak question** and
+**Send voice question**. Questions are explicitly segmented rather than using
+automatic voice-activity detection. The microphone is muted outside recording.
+**Stop playback or discard speech** suppresses the current audio response;
+**End voice session** stops the microphone and disconnects the room. A session
+lasts at most five minutes/eight questions, with at most 30 seconds per recording.
+HTTPS or localhost and a WebRTC-capable browser are required.
+
+Voice answers appear in the ordinary conversation with policy citations and the
+existing action-review dialogs. Saying “yes” never confirms a card block or loan
+submission; use the exact protected UI confirmation. Audio buffers are transient;
+no customer audio recording is stored. Transcripts and answers remain in the
+owner's chat history. Room grants are short-lived and scoped to one random room
+and identity, microphone publishing and subscription. Customer/run/session IDs
+correlate speech events with the banking trace; API bearer tokens stay in worker
+memory and are never sent as LiveKit metadata or model content.
+
+Speech events record conversion models, usage where available, duration, errors,
+interruptions and final banking run IDs. **Speech activity** exposes this evidence.
+Generative banking tokens, transcription tokens and speech-generation tokens are
+separate; no billing amount is invented. Browser recording/playback, live
+conversion and the agent workflow introduce noticeable latency. Cancellation can
+suppress playback but cannot guarantee cancellation of an already submitted
+provider/banking request or its charges. Check saved history before retrying.
+No automatic replay/reconnect is performed. If TTS fails, the saved text remains.
+
+## Twilio phone test (Plan 2 Phase 8B, local integration)
+
+The owner-only phone panel uses Twilio Programmable Voice to call an approved
+number. Twilio gathers speech and reads the answer; the question still goes
+through the same authenticated five-agent chat in a separate selected fictional
+customer conversation. The owner can read those turns in the phone panel. This
+path does not need a LiveKit SIP trunk. Browser voice continues
+to use LiveKit and Gemini STT/TTS. Sarvam is not integrated.
+
+Create a **separate owner account** at `http://localhost:8000/docs`: open
+`POST /api/v1/auth/register`, choose **Try it out**, and submit a name, email,
+and password of at least 12 characters. Copy the `id` from its response into
+`PHONE_OWNER_CUSTOMER_ID`, then sign in to the web app with that account. Do
+not use a seeded `demo.*@bankai.example` account for outbound calls. Set these
+values in the ignored root `.env` (never commit them):
+
+```dotenv
+PHONE_ENABLED=true
+PHONE_OWNER_CUSTOMER_ID=owner-UUID-from-auth-me
+TWILIO_ACCOUNT_SID=your-AC-prefixed-account-SID
+TWILIO_AUTH_TOKEN=your-Twilio-primary-auth-token
+PHONE_PUBLIC_BASE_URL=https://your-public-backend-host
+PHONE_CALLER_NUMBER=your-Twilio-trial-or-verified-caller-ID-in-E164
+PHONE_ALLOWED_NUMBERS=the-consenting-verified-recipient-in-E164
+PHONE_MAX_DURATION_SECONDS=300
+```
+
+The public URL must forward HTTPS POST requests to this backend, preserving the
+original path and query string. Twilio signs the callback against that exact
+public URL. A localhost URL cannot receive a call webhook. Apply migration
+`0007`, restart the backend, and sign in as the configured owner. The Text
+assistant then shows **Phone test with Twilio**. Confirm the recipient agreed,
+select the allowlisted number and fictional customer, and start the call. The recipient hears the
+fictional-demo disclosure, presses **1** to agree, and can ask up to three
+questions. Banking action confirmations remain in the web app.
+
+The backend allows one active call, at most two attempts per UTC day, and up to
+five minutes per call. It does not redial or record audio; only masked number
+suffixes, status events, and consented chat transcripts are saved locally.
+Twilio may store its own call metadata under your account. End call is available
+in the owner panel. Twilio's current trial outbound Call API requires a Twilio
+sample voice URL; BankAI sends its own URL for the five-agent conversation, so
+this outbound path requires an account that permits custom call instructions.
+The [Voice trial rules](https://www.twilio.com/docs/usage/trials/try-out-voice)
+also restrict recipient verification and calling geography. A trial account
+returned HTTP 400 on the first live dial attempt; no call was connected or
+conversation verified. Provider-free callback tests do not satisfy the phone
+exit gate.
+
 ## Prerequisites
 
 - Python 3.11+
@@ -393,6 +522,24 @@ See [API details and example bodies](docs/API_SPEC.md). No real transfers,
 credit decisions, identity document collection, or external bank connections exist.
 
 ## Documentation
+
+### Phase 9 evaluation pilot
+
+With the local PostgreSQL service running and the backend virtual environment
+installed, inspect the seven synthetic cases and five comparison cells without
+calling the model:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe evals/run_comparison.py
+```
+
+An explicit provider pilot can run one case and one cell, for example
+`--live --case loan-emi-fixed --cell 5 --max-attempts 1`. This can consume
+Gemini credits. It creates and removes an isolated synthetic database schema
+and writes its exploratory result to a unique ignored `.artifacts/phase9-pilot-*.json` file.
+The preliminary score checks saved receipts; a person must review answer
+quality. The complete 60-case benchmark and evaluation dashboard are pending.
 
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)

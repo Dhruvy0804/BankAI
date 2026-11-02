@@ -48,4 +48,25 @@ Use the isolated integration tests for repeatable fresh-state scenarios.
 
 Confirmed operations persist in the demo database. For a repeatable walkthrough
 without changing demo records, use the disposable browser smoke test described
-in TESTING.md. Agents, voice and evaluation remain later work.
+in TESTING.md.
+
+## Show the five-agent workflow to an evaluator
+
+1. Sign in to a fictional customer account and open **Text assistant**.
+   Open **View my demo banking records** to show that customer's current
+   accounts, transaction history, masked cards and loans side by side. Use
+   **Refresh demo records** after any confirmed action.
+2. Start a new conversation and click **Fill five-agent demo question**. Review
+   the account, card, loan and support request, then send it. This is read-only.
+3. Under the saved answer, open **Agent activity and shared context**. The five
+   role cards identify the ADK supervisor and four CrewAI specialists. Each
+   specialist card shows its verified output, MCP tools and any earlier agent
+   result it used. An agent not selected by the supervisor is labelled **Not
+   called for this question**.
+4. Scroll through the ordered event timeline to show A2A delegation, MCP tool
+   requests/results, Blackboard consumption and output validation. Open
+   **Verified shared artifacts** for the structured Pydantic records.
+
+The supervisor chooses relevant agents; a broad question invites all four
+specialists but does not guarantee every role will run. Show the actual trace
+and explain any unused role instead of claiming all five participated.
