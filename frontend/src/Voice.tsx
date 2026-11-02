@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { LocalAudioTrack, Room } from "livekit-client";
+import { AudioLines, Mic, MicOff, Volume2 } from "lucide-react";
 import { type Api, useAction } from "./api";
 import { ErrorNotice } from "./components";
 
@@ -121,8 +122,13 @@ export default function Voice({ api, conversationId, changed, busyChanged, disab
       else setStatus(result.status);
     });
   }
-  return <section className="notice" aria-label="Browser voice">
-    <h3>Browser voice</h3>
+  return <section className="voice-panel" aria-label="Browser voice">
+    <div className="voice-heading"><span><AudioLines size={18} /> Browser voice</span><span className={`voice-state voice-state-${status}`}>{status === "offline" ? "Disconnected" : status}</span></div>
+    <div className="voice-stage">
+      <div className={`voice-orb voice-orb-${status}`} aria-hidden="true"><div className="voice-orb-inner">{status === "offline" ? <MicOff size={32} /> : status === "speaking" ? <Volume2 size={32} /> : <Mic size={32} />}</div></div>
+      <div><strong>{status === "offline" ? "Ready when you are" : status === "ready" ? "Microphone connected" : status === "listening" ? "Listening" : status === "processing" ? "Processing your question" : status === "speaking" ? "Speaking response" : status}</strong>
+        <p className="muted">{status === "listening" ? "Your microphone is active." : status === "processing" ? "BankAI is working on your request." : status === "speaking" ? "Audio playback is active." : "Start a session to ask with your voice."}</p></div>
+    </div>
     <p>Speak with your demo banking assistant. Audio is sent to the configured speech provider; recordings are not stored. Transcripts and answers are saved in this conversation. Confirm banking actions using the review dialog, never by saying “yes”.</p>
     <p role="status">{status === "offline" ? "Voice is off." : `Voice: ${status}. Sessions last up to 5 minutes and 8 questions; each recording is limited to 30 seconds.`}</p>
     <div className="form-actions">

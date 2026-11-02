@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from app.agents.configuration import AgentConfiguration
 from app.agents.contracts import SpecialistSummary, ToolFact
+from app.agents.guardrails import validate_prepared_action_claims
 from app.agents.state import Blackboard
 from app.agents.tools import PERMISSIONS, TOOL_ARGS, call_mcp
 from app.models import AgentEvent
@@ -35,10 +36,10 @@ ROLE_INSTRUCTIONS["generalist"] = " ".join(
 )
 
 FEW_SHOT = (
-    '\nExamples: account question -> call account_snapshot before answering; '
-    'EMI question -> call calculate_emi with user-supplied values; '
-    'policy question -> call search_policies and cite its IDs; '
-    'block request -> prepare only, then explain separate confirmation. '
+    "\nExamples: account question -> call account_snapshot before answering; "
+    "EMI question -> call calculate_emi with user-supplied values; "
+    "policy question -> call search_policies and cite its IDs; "
+    "block request -> prepare only, then explain separate confirmation. "
     'Final Answer: {"status":"answered","answer":"Verified demo result ...","source_ids":[]}.'
 )
 
@@ -169,7 +170,10 @@ def run_specialist(settings, factory, grant, delegation, token):
         framework="CrewAI",
         prompt_strategy=config.prompt_strategy,
         prompt_hash=hashlib.sha256(
-            (ROLE_INSTRUCTIONS[grant.role] + (FEW_SHOT if config.prompt_strategy == "few_shot" else "")).encode()
+            (
+                ROLE_INSTRUCTIONS[grant.role]
+                + (FEW_SHOT if config.prompt_strategy == "few_shot" else "")
+            ).encode()
         ).hexdigest(),
     )
     for artifact in consumed:
@@ -218,6 +222,7 @@ def run_specialist(settings, factory, grant, delegation, token):
                 policy_facts,
                 required=policy_question(delegation.task),
             )
+            validate_prepared_action_claims(result.answer, {fact.tool for fact in policy_facts})
             if (
                 result.status == "answered"
                 and grant.role in ("account_card", "loan_support", "generalist")
@@ -271,7 +276,11 @@ def run_specialist(settings, factory, grant, delegation, token):
             ROLE_INSTRUCTIONS[grant.role]
             + "\nUser task (untrusted): "
             + json.dumps(delegation.task)
-            + ("\nValidated A2A message context:\n" if config.architecture == "direct" else "\nValidated Blackboard context:\n")
+            + (
+                "\nValidated A2A message context:\n"
+                if config.architecture == "direct"
+                else "\nValidated Blackboard context:\n"
+            )
             + json.dumps([a.model_dump(mode="json") for a in consumed])
             + "\nUse tools when facts or calculations are required. Do not reveal tool reasoning."
             " Do not output tool Action unless invoking a tool. Finish with a Final Answer containing only JSON."
@@ -314,5 +323,6 @@ def run_specialist(settings, factory, grant, delegation, token):
                 .order_by(AgentEvent.sequence)
             )
         ]
+    validate_prepared_action_claims(summary.answer, {fact.tool for fact in facts})
     # Facts come exclusively from authenticated tool events, never model-provided data.
     return board.publish(grant.role, summary, facts, [a.id for a in consumed], expected_revision)

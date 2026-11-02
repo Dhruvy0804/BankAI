@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "motion/react";
+import { ArrowLeftRight, Bot, ChevronLeft, ChevronRight, CircleHelp, CreditCard, Landmark, LayoutDashboard, LifeBuoy, LogOut, ShieldCheck, Wallet } from "lucide-react";
 import { ApiError, type Api, type Customer, request, useResource } from "./api";
+import { Button } from "./components/ui/button";
 import { ResourceState } from "./components";
 import Login, { type Session } from "./Login";
 import Chat from "./Chat";
@@ -15,16 +18,17 @@ import {
 // shortcut: tab storage is JavaScript-readable; use HttpOnly cookies before public deployment.
 const SESSION_KEY = "bankai-session";
 const navigation = [
-  ["dashboard", "Dashboard", "◈"],
-  ["accounts", "Accounts", "▣"],
-  ["transactions", "Transactions", "↔"],
-  ["cards", "Cards", "▤"],
-  ["loans", "Loans", "▥"],
-  ["support", "Support", "◎"],
-  ["chat", "Text assistant", "◌"],
-  ["about", "About", "ⓘ"],
+  ["dashboard", "Dashboard", LayoutDashboard],
+  ["accounts", "Accounts", Wallet],
+  ["transactions", "Transactions", ArrowLeftRight],
+  ["cards", "Cards", CreditCard],
+  ["loans", "Loans", Landmark],
+  ["support", "Support", LifeBuoy],
+  ["chat", "Text assistant", Bot],
+  ["about", "About", CircleHelp],
 ] as const;
 type Page = (typeof navigation)[number][0];
+const Intro = lazy(() => import("./Intro"));
 
 function savedSession(): Session | null {
   try {
@@ -55,6 +59,7 @@ function currentPage(): Page {
 function BankingWorkspace({ api, signOut }: { api: Api; signOut: () => void }) {
   const customer = useResource<Customer>(api, "/auth/me");
   const [page, setPage] = useState<Page>(currentPage);
+  const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     const changed = () => setPage(currentPage());
     window.addEventListener("hashchange", changed);
@@ -62,47 +67,45 @@ function BankingWorkspace({ api, signOut }: { api: Api; signOut: () => void }) {
   }, []);
   const title = navigation.find(([value]) => value === page)![1];
   return (
-    <div className="app-layout">
-      <aside>
+    <div className={`app-layout${collapsed ? " sidebar-collapsed" : ""}`}>
+      <aside aria-label="Workspace sidebar">
         <a className="brand" href="#dashboard">
-          <span className="brand-icon">B</span>BankAI
-          <span className="brand-dot">.</span>
+          <span className="brand-icon"><Landmark size={20} strokeWidth={1.8} /></span>
+          <span className="brand-word">BankAI<span className="brand-dot">.</span><small>AGENT WORKSPACE</small></span>
         </a>
-        <p className="nav-caption">YOUR BANKING</p>
+        <div className="sidebar-section-heading"><p className="nav-caption">WORKSPACE</p>
+          <Button variant="ghost" size="icon" className="sidebar-toggle" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setCollapsed(!collapsed)}>{collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</Button>
+        </div>
         <nav aria-label="Main navigation">
-          {navigation.map(([value, text, icon]) => (
+          {navigation.map(([value, text, Icon]) => (
             <a
               key={value}
               className={page === value ? "active" : ""}
               aria-current={page === value ? "page" : undefined}
               href={`#${value}`}
+              title={collapsed ? text : undefined}
+              aria-label={collapsed ? text : undefined}
               onClick={() => setPage(value)}
             >
-              <span aria-hidden="true">{icon}</span>
-              {text}
+              {page === value && <motion.span layoutId="active-nav" className="nav-active-indicator" transition={{ type: "spring", stiffness: 380, damping: 35 }} />}
+              <Icon size={17} strokeWidth={1.8} aria-hidden="true" />
+              <span className="nav-text">{text}</span>
             </a>
           ))}
         </nav>
         <div className="sidebar-note">
-          <span className="small-label">DEMO WORKSPACE</span>
-          <p>
-            Fictional accounts.
-            <br />
-            Real learning.
-          </p>
-          <button className="secondary" onClick={signOut}>
-            Sign out
-          </button>
+          <span className="small-label">CURRENT SESSION</span>
+          <p>{customer.data?.full_name || "Demo customer"}<br /><small>Fictional banking data</small></p>
+          <Button variant="outline" size="sm" onClick={signOut}><LogOut size={15} /><span className="nav-text">Sign out</span></Button>
         </div>
       </aside>
       <main>
         <header>
-          <span>
-            Banking / <strong>{title}</strong>
-          </span>
+          <span className="header-crumb">BankAI <ChevronRight size={14} aria-hidden="true" /> <strong>{title}</strong></span>
           <div className="header-user">
+            <span className="connection-indicator"><span className="dot" />{customer.data ? "Connected" : "Connecting"}</span>
             <span className="demo-pill">
-              <span className="dot" /> Synthetic data
+              <ShieldCheck size={13} aria-hidden="true" /> Synthetic data
             </span>
             <button className="secondary mobile-signout" onClick={signOut}>
               Sign out
@@ -151,9 +154,12 @@ function BankingWorkspace({ api, signOut }: { api: Api; signOut: () => void }) {
 }
 
 function About() {
+  const [showIntro, setShowIntro] = useState(false);
   return (
     <section className="panel">
       <h2>A banking assistant with a research goal</h2>
+      <button className="secondary" type="button" onClick={() => setShowIntro((value) => !value)}>{showIntro ? "Hide introduction" : "Play illustrated introduction"}</button>
+      {showIntro && <><p className="muted">Illustrative network animation · not a live agent run</p><Suspense fallback={<p role="status">Loading introduction…</p>}><Intro /></Suspense></>}
       <p>
         BankAI is a final-year engineering project using fictional customers,
         accounts and policies. No real bank accounts are connected.

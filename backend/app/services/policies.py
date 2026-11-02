@@ -12,6 +12,7 @@ from google.genai import types
 from pydantic import Field
 from sqlalchemy import func, select, text
 
+from app.agents.guardrails import INSTRUCTION_ATTACK
 from app.core.config import ROOT, Settings
 from app.core.errors import APIError
 from app.db.session import build_engine
@@ -22,11 +23,7 @@ POLICY_DIR = ROOT / "data" / "banking_policies"
 APPROVED_FILES = ("demo_loans.md", "demo_cards.md", "demo_accounts_support.md")
 DIMENSIONS = 768
 MIN_SIMILARITY = 0.60
-UNSAFE_TEXT = re.compile(
-    r"ignore\s+(?:all\s+)?(?:previous|system|developer|prior)\s+instructions"
-    r"|<(?:script|system|developer)\b|(?:reveal|print)\s+(?:the\s+)?(?:api key|system prompt)",
-    re.IGNORECASE,
-)
+UNSAFE_TEXT = re.compile(r"<\s*(?:script|iframe)\b", re.IGNORECASE)
 
 
 def policy_question(value):
@@ -64,7 +61,7 @@ class PolicySearch(Input):
 
 def chunks(markdown):
     """Each short, named section is one citation unit; reject oversized source edits."""
-    if UNSAFE_TEXT.search(markdown):
+    if INSTRUCTION_ATTACK.search(markdown) or UNSAFE_TEXT.search(markdown):
         raise ValueError(
             "Policy contains instruction-like or executable text; operator review required"
         )

@@ -27,7 +27,7 @@ test("shows verified work and unused roles in the five-agent trace", async () =>
     if (path === "/chat/conversations/c1") return {
       id: "c1", title: "Demo", created_at: "2026-01-01T00:00:00Z",
       turns: [{ message_id: "m1", user_text: "Check account and EMI", created_at: "2026-01-01T00:00:00Z",
-        response: { status: "answered", answer: "Verified answer", run_id: "r1", request_id: "q1",
+        response: { status: "answered", answer: "**Verified** answer <script>alert(1)</script>", run_id: "r1", request_id: "q1",
           provider: "gemini", model: "demo", duration_ms: 100, input_tokens: 10, output_tokens: 10, total_tokens: 20 } }],
     };
     if (path === "/chat/runs/r1") return {
@@ -44,6 +44,8 @@ test("shows verified work and unused roles in the five-agent trace", async () =>
     throw new Error(`Unexpected request: ${path}`);
   });
   render(<Chat api={api as Api} />);
+  expect(await screen.findByText("Verified")).toHaveProperty("tagName", "STRONG");
+  expect(screen.queryByText("alert(1)")).not.toBeInTheDocument();
   fireEvent.click(await screen.findByText("Agent activity and shared context"));
   expect(await screen.findByRole("heading", { name: "5-agent workflow" })).toBeInTheDocument();
   expect(within(screen.getByRole("region", { name: "loan agent" })).getByText("EMI calculated")).toBeInTheDocument();

@@ -1,9 +1,14 @@
-import { useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useRef, useState, type FormEvent } from "react";
+import { CheckCheck, Send, Sparkles, UserRound } from "lucide-react";
 import { type Api, type Pending, dateTime, money, label, useAction, useResource } from "./api";
 import { Confirmation, ErrorNotice, ResourceState } from "./components";
 import DemoData from "./DemoData";
 import Voice from "./Voice";
 import Phone from "./Phone";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+const AgentWorkflow = lazy(() => import("./AgentWorkflow"));
 
 type Status = { configured: boolean; provider: string; model: string; mode?: "guidance" | "agents"; voice_configured?: boolean; phone_configured?: boolean };
 type Conversation = { id: string; title: string; created_at: string };
@@ -120,13 +125,17 @@ function ConversationChat({ api, id, configured, setBusy, changed, voiceEnabled,
     <>
       {voiceEnabled && <Voice api={api} conversationId={id} disabled={action.busy || phoneBusy}
         changed={() => { detail.reload(); changed(); }} busyChanged={(value) => { setVoiceBusy(value); setBusy(value); }} />}
+      <Suspense fallback={<p role="status" className="muted">Loading agent canvas…</p>}>
+        <AgentWorkflow api={api} runId={detail.data?.turns.at(-1)?.response.run_id}
+          sources={detail.data?.turns.at(-1)?.response.sources} processing={action.busy || voiceBusy} />
+      </Suspense>
       <ResourceState {...detail}>
         <div className="chat-transcript" role="log" aria-label="Conversation messages" aria-live="polite">
           {!detail.data?.turns.length && <p>No messages yet.</p>}
           {detail.data?.turns.map((turn) => <article key={turn.message_id} className="chat-turn">
-            <h3>You</h3><p className="chat-text">{turn.user_text}</p>
-            <h3>BankAI · {turn.response.status.replaceAll("_", " ")}</h3>
-            <p className="chat-text">{turn.response.answer}</p>
+            <div className="chat-message chat-message-user"><div className="chat-message-heading"><UserRound size={17} /><h3>You</h3><time>{dateTime(turn.created_at)}</time></div><p className="chat-text">{turn.user_text}</p></div>
+            <div className="chat-message chat-message-assistant"><div className="chat-message-heading"><Sparkles size={17} /><h3>BankAI</h3><span className={`response-status response-${turn.response.status}`}><CheckCheck size={14} />{turn.response.status.replaceAll("_", " ")}</span></div>
+            <div className="chat-text markdown-answer"><ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{turn.response.answer}</ReactMarkdown></div>
             {!!turn.response.sources?.length && <section aria-label="Policy sources">
               <h4>Fictional policy sources</h4>
               {turn.response.sources.map((source) => <details key={source.citation_id}>
@@ -138,10 +147,10 @@ function ConversationChat({ api, id, configured, setBusy, changed, voiceEnabled,
             <details><summary>Response details</summary>
               <p className="muted">{turn.response.model} · {turn.response.duration_ms} ms · {turn.response.total_tokens ?? "Unavailable"} model tokens</p>
               <p className="muted">Request: {turn.response.request_id}</p>
-              <pre className="chat-json">{JSON.stringify(turn.response, null, 2)}</pre>
+              <p className="muted">Status: {label(turn.response.status)} · Provider: {turn.response.provider} · Run: {turn.response.run_id || "Unavailable"}</p>
             </details>
             {turn.response.run_id && <RunActivity api={api} runId={turn.response.run_id} />}
-            {turn.response.pending_actions?.map((pending) => <PendingChatAction key={pending.id} api={api} pending={pending} />)}
+            {turn.response.pending_actions?.map((pending) => <PendingChatAction key={pending.id} api={api} pending={pending} />)}</div>
           </article>)}
         </div>
       </ResourceState>
@@ -155,7 +164,7 @@ function ConversationChat({ api, id, configured, setBusy, changed, voiceEnabled,
         <p className="muted">Only the latest 10 exchanges are sent as context. After a connection error, refresh history before changing and resending your question.</p>
         <div className="form-actions">
           <button className="primary" disabled={!configured || !message.trim() || action.busy || voiceBusy || phoneBusy || detail.loading || !!detail.error || (detail.data?.turns.length || 0) >= 100}>
-            {action.busy ? "Generating…" : "Send message"}
+            <Send size={15} aria-hidden="true" /> {action.busy ? "Generating…" : "Send message"}
           </button>
           <button type="button" className="secondary" disabled={action.busy} onClick={detail.reload}>Refresh history</button>
         </div>
@@ -210,9 +219,7 @@ function RunTrace({ api, runId }: { api: Api; runId: string }) {
       </div>
       <ol className="agent-timeline" tabIndex={0} aria-label="Agent execution timeline">{trace.data.events.map((event) => <li key={event.id}>
         <strong>{event.role}</strong> · {event.kind.replaceAll("_", " ")}
-        <details><summary>Event details</summary><pre className="chat-json">{JSON.stringify(event.metadata, null, 2)}</pre></details>
       </li>)}</ol>
-      <details><summary>Verified shared artifacts</summary><pre className="chat-json">{JSON.stringify(trace.data.artifacts, null, 2)}</pre></details>
     </>}
   </ResourceState>;
 }

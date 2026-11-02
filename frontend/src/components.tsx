@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError, type Pending, dateTime, useAction } from "./api";
+import { Skeleton } from "./components/ui/skeleton";
 
 export function ErrorNotice({
   error,
@@ -39,9 +40,7 @@ export function ResourceState({
 }) {
   if (loading)
     return (
-      <p className="empty-state" role="status">
-        Loading your demo records…
-      </p>
+      <div className="resource-loading" role="status"><p className="empty-state">Loading your demo records…</p><Skeleton className="h-3 w-3/4" /><Skeleton className="h-3 w-1/2" /></div>
     );
   if (error) return <ErrorNotice error={error} retry={reload} />;
   if (empty) return <p className="empty-state">{empty}</p>;

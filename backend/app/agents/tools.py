@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.server.fastmcp import FastMCP
-from pydantic import Field
+from pydantic import Field, ValidationError
 from sqlalchemy import select
 
 from app.agents.contracts import ToolFact
@@ -17,7 +17,9 @@ from app.models import AgentEvent
 from app.schemas import (
     AccountOut,
     CardOut,
+    EligibilityOut,
     EMIInput,
+    EMIOut,
     Input,
     KYCOut,
     LoanInput,
@@ -29,7 +31,7 @@ from app.schemas import (
     TransactionQuery,
 )
 from app.services.banking import BankingService, calculate_emi
-from app.services.policies import PolicyQuery, retrieve
+from app.services.policies import PolicyQuery, PolicySearch, retrieve
 
 
 class AccountArgs(Input):
@@ -78,6 +80,19 @@ TOOL_ARGS = {
     "loan_snapshot": EmptyArgs,
     "support_tickets": EmptyArgs,
     "create_support_ticket": TicketInput,
+}
+TOOL_RESULTS = {
+    "search_policies": PolicySearch,
+    "account_snapshot": AccountSnapshot,
+    "card_snapshot": CardSnapshot,
+    "prepare_card_block": PendingOut,
+    "calculate_emi": EMIOut,
+    "loan_eligibility": EligibilityOut,
+    "prepare_loan_application": PendingOut,
+    "recent_transactions": TransactionPage,
+    "loan_snapshot": LoanSnapshot,
+    "support_tickets": TicketSnapshot,
+    "create_support_ticket": TicketOut,
 }
 PERMISSIONS = {
     "account": {"account_snapshot", "recent_transactions"},
@@ -340,7 +355,13 @@ async def call_mcp(settings, token, name, arguments):
         result = await session.call_tool(name, arguments)
     if result.isError:
         raise APIError(502, "MCP_TOOL_ERROR", "The banking tool rejected the request.")
-    fact = ToolFact.model_validate(result.structuredContent)
-    if fact.tool != name:
-        raise APIError(502, "MCP_INVALID_OUTPUT", "The banking tool returned an invalid result.")
+    try:
+        fact = ToolFact.model_validate(result.structuredContent)
+        if fact.tool != name:
+            raise ValueError("Unexpected MCP tool name")
+        TOOL_RESULTS[name].model_validate(fact.data)
+    except (ValidationError, ValueError, TypeError) as exc:
+        raise APIError(
+            502, "MCP_INVALID_OUTPUT", "The banking tool returned an invalid result."
+        ) from exc
     return fact

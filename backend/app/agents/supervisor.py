@@ -18,6 +18,11 @@ from google.genai import types
 
 from app.agents.configuration import DEFAULT_CONFIGURATION, AgentConfiguration
 from app.agents.contracts import Artifact, SupervisorAnswer
+from app.agents.guardrails import (
+    filter_attack_history,
+    unsafe_request,
+    validate_prepared_action_claims,
+)
 from app.agents.protocols import delegate_a2a
 from app.agents.state import Blackboard
 from app.agents.tools import AccountSnapshot
@@ -25,13 +30,6 @@ from app.core.errors import APIError
 from app.models import AgentRun
 from app.services.policies import policy_question, validate_citations
 
-INJECTION = re.compile(
-    r"ignore\s+(?:all\s+)?(?:previous|system|developer|prior)\s+(?:instructions|rules|prompts)"
-    r"|(?:reveal|print|show|expose)\b.{0,30}\b(?:system prompt|api key|secret key|passwords)"
-    r"|\b(?:bypass|disable)\b.{0,30}\b(?:confirmation|authorization|guardrails)",
-    re.IGNORECASE,
-)
-ABUSE = re.compile(r"\byou(?:'re| are) (?:an? )?(?:idiot|moron)\b", re.IGNORECASE)
 AFFORDABILITY = re.compile(
     r"\b(?:can|could|will|would)\s+i\b.{0,100}\b(?:afford|handle|pay|cover|manage)\b"
     r".{0,80}\b(?:emi|instalments?|installments?)\b"
@@ -93,7 +91,8 @@ def clarify_unverified_affordability(
         return answer
     accounts = [
         account
-        for fact in facts if fact.tool == "account_snapshot"
+        for fact in facts
+        if fact.tool == "account_snapshot"
         for account in AccountSnapshot.model_validate(fact.data).accounts
     ]
     balances = "; ".join(
@@ -129,16 +128,19 @@ def instruction_for(config: AgentConfiguration) -> str:
 
 
 async def run_supervisor(
-    settings, factory, customer_id, conversation_id, request_id, history,
+    settings,
+    factory,
+    customer_id,
+    conversation_id,
+    request_id,
+    history,
     configuration: AgentConfiguration | None = None,
 ):
     if not settings.llm_configured:
         raise APIError(503, "LLM_NOT_CONFIGURED", "Configure the backend model provider first.")
     config = configuration or DEFAULT_CONFIGURATION
     instruction = instruction_for(config)
-    prompt_version = (
-        f"phase9-{config.prompt_strategy}-v1" if configuration else "phase7-rag-v1"
-    )
+    prompt_version = f"phase9-{config.prompt_strategy}-v1" if configuration else "phase7-rag-v1"
     run_id, started = uuid4(), monotonic()
     with factory() as db, db.begin():
         db.add(
@@ -167,7 +169,7 @@ async def run_supervisor(
         tool_call_limit=16,
     )
     question = history[-1][1]
-    if INJECTION.search(question) or ABUSE.search(question):
+    if unsafe_request(question):
         board.event("supervisor", "guardrail_rejected", rule="prompt_or_abuse")
         answer = SupervisorAnswer(
             status="refused",
@@ -214,6 +216,9 @@ async def run_supervisor(
                 candidate,
                 [f for a in evidence for f in a.facts],
                 required=policy_question(question),
+            )
+            validate_prepared_action_claims(
+                candidate.answer, {fact.tool for artifact in evidence for fact in artifact.facts}
             )
             if candidate.status == "answered" and not evidence:
                 raise ValueError("An answered result requires a specialist artifact")
@@ -267,7 +272,14 @@ async def run_supervisor(
             )
             runner = Runner(agent=agent, app_name="bankai", session_service=sessions)
             final = ""
-            context = json.dumps({"prior_conversation": history[:-1], "current_request": question})
+            prior = filter_attack_history(history[:-1])
+            if len(prior) != len(history) - 1:
+                board.event(
+                    "supervisor",
+                    "history_filtered",
+                    removed_turns=(len(history) - 1 - len(prior)) // 2,
+                )
+            context = json.dumps({"prior_conversation": prior, "current_request": question})
             async with asyncio.timeout(settings.agent_timeout_seconds):
                 async for event in runner.run_async(
                     user_id=str(customer_id),
@@ -285,6 +297,9 @@ async def run_supervisor(
                 answer,
                 [f for a in board.read() for f in a.facts],
                 required=policy_question(question),
+            )
+            validate_prepared_action_claims(
+                answer.answer, {fact.tool for artifact in board.read() for fact in artifact.facts}
             )
             if not board.read() and answer.status == "answered":
                 raise APIError(

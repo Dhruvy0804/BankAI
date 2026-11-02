@@ -21,6 +21,31 @@ Original implementation-plan documents remain preserved; phased delivery.
 | 9B–9C: Evaluation web dashboard and benchmark readiness | Not started |
 | 10: Final deployment/demo verification | Not started |
 
+## Guardrail hardening checkpoint
+
+The agent workflow now checks current user text for common instruction override,
+role spoofing, secret disclosure and confirmation bypass attempts before any model
+or banking tool call. Rejected prompts produce a `refused` response and a
+`guardrail_rejected` trace event. Rejected earlier turns are omitted from later
+model context; ordinary banking complaints remain allowed. Approved policy
+sections use the same instruction-attack check plus executable HTML checks at
+ingestion.
+
+The MCP client validates each returned payload against its tool-specific Pydantic
+schema, in addition to checking the tool name and the generic `ToolFact` contract.
+Specialist output guardrails and final supervisor validation reject claims that
+a prepared card block or loan application was completed. Existing server-side
+owner checks, role permissions, budgets, citation checks and separate action
+confirmation remain in force. The 2/3/5 runtime still supports ReAct and
+few-shot prompt versions.
+
+Verification: 20 focused guardrail/policy unit tests passed; 23 relevant
+database-backed A2A/MCP/policy/evaluation integration tests passed with four
+opt-in skips; three endpoint attack variants produced refusals without model
+or tool calls. This is local implementation evidence. Heuristic text checks
+cannot detect every paraphrased attack, and a controlled prompt-variant
+benchmark remains part of Phase 9.
+
 ## Plan 2 Phase 9A: evaluation runtime checkpoint
 
 Phase 9A began while the user deferred Phase 8B's live-call exit check. A typed
