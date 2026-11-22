@@ -16,6 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from starlette.exceptions import HTTPException
 
 from app.api.chat import router as chat_router
+from app.api.evaluation import router as evaluation_router
 from app.api.phone import router as phone_router
 from app.api.routes import router
 from app.api.voice import router as voice_router
@@ -172,6 +173,7 @@ def create_app(
 
     app.include_router(router)
     app.include_router(chat_router)
+    app.include_router(evaluation_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["Infrastructure"])
     def health():

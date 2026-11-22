@@ -44,13 +44,19 @@ class Settings(BaseSettings):
     tts_api_key: SecretStr | None = None
     tts_model: Literal["gemini-3.8-flash-lite-tts"] = "gemini-3.8-flash-lite-tts"
     phone_enabled: bool = False
+    phone_provider: Literal["twilio", "plivo"] = "twilio"
     phone_owner_customer_id: str = ""
+    evaluation_owner_customer_id: str = ""
+    evaluation_live_enabled: bool = False
+    evaluation_cell_cooldown_seconds: int = Field(default=65, ge=0, le=300)
     phone_allowed_numbers: str = ""
     phone_caller_number: str = ""
     phone_public_base_url: str = ""
     phone_max_duration_seconds: int = Field(default=300, ge=60, le=300)
     twilio_account_sid: SecretStr | None = None
     twilio_auth_token: SecretStr | None = None
+    plivo_auth_id: SecretStr | None = None
+    plivo_auth_token: SecretStr | None = None
 
     @property
     def phone_configured(self) -> bool:
@@ -63,6 +69,7 @@ class Settings(BaseSettings):
             self.phone_enabled
             and self.chat_mode == "agents"
             and self.llm_configured
+            and (self.phone_provider != "plivo" or self.phone_max_duration_seconds >= 100)
             and re.fullmatch(r"[0-9a-fA-F-]{36}", self.phone_owner_customer_id)
             and allowed
             and all(re.fullmatch(r"\+[1-9]\d{7,14}", n) for n in allowed)
@@ -70,10 +77,22 @@ class Settings(BaseSettings):
             and url.scheme == "https"
             and url.hostname
             and not (url.username or url.password or url.query or url.fragment or url.path not in ("", "/"))
-            and self.twilio_account_sid
-            and re.fullmatch(r"AC[0-9a-fA-F]{32}", self.twilio_account_sid.get_secret_value())
-            and self.twilio_auth_token
-            and self.twilio_auth_token.get_secret_value().strip()
+            and (
+                (
+                    self.phone_provider == "twilio"
+                    and self.twilio_account_sid
+                    and re.fullmatch(r"AC[0-9a-fA-F]{32}", self.twilio_account_sid.get_secret_value())
+                    and self.twilio_auth_token
+                    and self.twilio_auth_token.get_secret_value().strip()
+                )
+                or (
+                    self.phone_provider == "plivo"
+                    and self.plivo_auth_id
+                    and self.plivo_auth_id.get_secret_value().strip()
+                    and self.plivo_auth_token
+                    and self.plivo_auth_token.get_secret_value().strip()
+                )
+            )
         )
 
     @field_validator("livekit_url", "livekit_internal_url")

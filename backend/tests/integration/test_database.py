@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 
 from alembic import command
 from app.db.base import Base
-from app.models import Account, Card, Customer, Loan, PolicyChunk, Transaction
-from app.seed.demo_data import DEMO_PASSWORD, demo_id, seed_demo
+from app.models import Account, Card, Customer, KYCRecord, Loan, PolicyChunk, Transaction
+from app.seed.demo_data import DEMO_PASSWORD, demo_id, seed_demo, seed_owner_demo
 
 pytestmark = pytest.mark.integration
 
@@ -59,6 +59,31 @@ def test_repeat_seed_preserves_changes_and_passwords(migrated_db):
         assert card.status == "blocked"
         assert customer.password_hash == old_hash
         assert session.scalar(select(func.count()).select_from(Customer)) == 3
+
+
+def test_owner_demo_profile_is_independent_and_idempotent(migrated_db):
+    connection, _ = migrated_db
+    owner_id = uuid4()
+    with Session(connection) as session, session.begin():
+        seed_demo(session)
+        session.add(Customer(id=owner_id, full_name="Project Owner", email="owner@example.org", password_hash="test-only"))
+        session.add(KYCRecord(customer_id=owner_id, status="pending", notes="Existing owner status"))
+        session.flush()
+        first = seed_owner_demo(session, owner_id)
+        assert first == {"kyc_records": 0, "loans": 1, "support_tickets": 1,
+                         "accounts": 2, "transactions": 6, "cards": 2}
+        assert session.scalar(select(KYCRecord).where(KYCRecord.customer_id == owner_id)).status == "pending"
+        accounts = session.scalars(select(Account).where(Account.customer_id == owner_id)).all()
+        assert {account.balance for account in accounts} == {Decimal("25000.00"), Decimal("4500.00")}
+        for account in accounts:
+            total = sum((t.amount if t.transaction_type == "credit" else -t.amount for t in account.transactions), Decimal("0.00"))
+            assert account.balance == total
+        card = session.scalar(select(Card).where(Card.customer_id == owner_id, Card.status == "active"))
+        card.status = "blocked"
+        assert all(count == 0 for count in seed_owner_demo(session, owner_id).values())
+        session.flush()
+        assert card.status == "blocked"
+        assert session.scalar(select(func.count()).select_from(Account).where(Account.customer_id == demo_id("customer-1"))) == 2
 
 
 def test_money_and_seed_relationships(migrated_db):

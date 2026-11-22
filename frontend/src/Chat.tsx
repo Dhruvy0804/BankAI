@@ -5,6 +5,7 @@ import { Confirmation, ErrorNotice, ResourceState } from "./components";
 import DemoData from "./DemoData";
 import Voice from "./Voice";
 import Phone from "./Phone";
+import TextComparison from "./TextComparison";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -31,7 +32,7 @@ type Detail = Conversation & {
   turns: { message_id: string; user_text: string; response: Reply; created_at: string }[];
 };
 
-export default function Chat({ api }: { api: Api }) {
+export default function Chat({ api, comparisonEnabled = false }: { api: Api; comparisonEnabled?: boolean }) {
   const status = useResource<Status>(api, "/chat/status");
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState(false);
@@ -59,8 +60,8 @@ export default function Chat({ api }: { api: Api }) {
         )}
       </ResourceState>
       {status.data?.mode === "agents" && <p className="muted">Five-agent assistant · Facts are retrieved from BankSim. Preparing a request does not execute it.</p>}
-      <DemoData api={api} />
       {status.data?.phone_configured && <Phone api={api} disabled={busy} busyChanged={setPhoneBusy} />}
+      <DemoData api={api} />
       <div className="form-actions">
         <button className="primary" disabled={busy || phoneBusy || create.busy} onClick={() => void create.run(async () => {
           const conversation = await api<Conversation>("/chat/conversations", {});
@@ -89,19 +90,22 @@ export default function Chat({ api }: { api: Api }) {
       </ResourceState>
       {active ? <ConversationChat key={active} api={api} id={active}
         configured={status.data?.configured === true} setBusy={setBusy}
-        changed={() => { setSelected(active); conversations.reload(); }} voiceEnabled={status.data?.voice_configured === true} phoneBusy={phoneBusy} />
+        changed={() => { setSelected(active); conversations.reload(); }} voiceEnabled={status.data?.voice_configured === true} phoneBusy={phoneBusy} comparisonEnabled={comparisonEnabled} />
         : <p className="empty-state">Start a conversation to ask a question.</p>}
     </section>
   );
 }
 
-function ConversationChat({ api, id, configured, setBusy, changed, voiceEnabled, phoneBusy }: {
-  api: Api; id: string; configured: boolean; setBusy: (value: boolean) => void; changed: () => void; voiceEnabled: boolean; phoneBusy: boolean;
+function ConversationChat({ api, id, configured, setBusy, changed, voiceEnabled, phoneBusy, comparisonEnabled }: {
+  api: Api; id: string; configured: boolean; setBusy: (value: boolean) => void; changed: () => void; voiceEnabled: boolean; phoneBusy: boolean; comparisonEnabled: boolean;
 }) {
   const detail = useResource<Detail>(api, `/chat/conversations/${id}`);
   const [message, setMessage] = useState("");
   const pending = useRef<{ text: string; id: string } | undefined>(undefined);
   const action = useAction();
+  const comparison = useAction();
+  const [costAcknowledged, setCostAcknowledged] = useState(false);
+  const [comparisonJobId, setComparisonJobId] = useState("");
   const [voiceBusy, setVoiceBusy] = useState(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -119,6 +123,17 @@ function ConversationChat({ api, id, configured, setBusy, changed, voiceEnabled,
       } finally {
         setBusy(false);
       }
+    });
+  }
+  async function compare() {
+    if (!message.trim() || !costAcknowledged || comparison.busy || action.busy) return;
+    await comparison.run(async () => {
+      const job = await api<{ id: string }>("/evaluation/text-comparisons", {
+        conversation_id: id, question: message.trim(), acknowledge_provider_cost: true,
+      });
+      setComparisonJobId(job.id);
+      setCostAcknowledged(false);
+      setMessage("");
     });
   }
   return (
@@ -168,9 +183,17 @@ function ConversationChat({ api, id, configured, setBusy, changed, voiceEnabled,
           </button>
           <button type="button" className="secondary" disabled={action.busy} onClick={detail.reload}>Refresh history</button>
         </div>
+        {comparisonEnabled && <div className="text-comparison-action">
+          <label className="evaluation-check"><input type="checkbox" checked={costAcknowledged} onChange={(event) => setCostAcknowledged(event.target.checked)} />I understand this comparison runs three model evaluations and may use paid credits.</label>
+          <button type="button" className="secondary" disabled={!configured || !message.trim() || !costAcknowledged || action.busy || comparison.busy || voiceBusy || phoneBusy}
+            onClick={() => void compare()}>{comparison.busy ? "Starting comparison…" : "Compare 2/3/5 agents"}</button>
+          <p className="muted">Uses this typed question and your signed-in demo account. The three answers and metrics appear below.</p>
+          <ErrorNotice error={comparison.error} />
+        </div>}
         {action.busy && <p role="status">Waiting for the assistant…</p>}
         {(detail.data?.turns.length || 0) >= 100 && <p role="status">This conversation is full. Start a new conversation.</p>}
       </form>
+      {comparisonEnabled && <TextComparison api={api} conversationId={id} selectedJobId={comparisonJobId} />}
     </>
   );
 }

@@ -5,7 +5,7 @@
 **Main system:** Five agents in total, including the supervisor.
 **Evaluation configurations:** Two, three, and five agents in total.
 **Frameworks:** Google ADK and CrewAI only.
-**Status:** Phases 0–8A implemented locally. Phase 8B's real-call exit gate is deferred; Phase 9A is in progress. See [implementation status](docs/IMPLEMENTATION_STATUS.md) for verification evidence and limitations.
+**Status:** Phases 0–8A implemented locally. Phase 8B's multi-turn real-call exit gate remains open. Phase 9 has a 60-case manifest and owner evaluation lab implemented locally; provider-backed comparison and human review remain open. See [implementation status](docs/IMPLEMENTATION_STATUS.md) for verification evidence and limitations.
 
 ## 1. Relationship to the original plan
 
@@ -35,7 +35,7 @@ Retain:
 
 Repository status at preparation: Phases 0–4 are recorded as complete; Phases 5 onward are not started. Recheck the repository and test results before implementation.
 
-Current checkpoint: Phases 5, 6A–6C, 7, and 8A have been implemented locally. Browser voice uses LiveKit media with dedicated Gemini transcription and speech synthesis, the same saved five-agent chat, and explicit UI confirmations. A real two-turn audio conversation and desktop/mobile browser checks passed. Phase 8B has a local Twilio Programmable Voice call path, owner controls, consent, signed callbacks, and provider-free tests; its real-call exit gate is deferred by the user. Phase 9A has 2/3/5 runtime roles, Blackboard/direct context delivery and ReAct/few-shot prompts, plus a seven-case isolated evaluation pilot verified without provider calls. The full scenario set, saved evaluation jobs, real-provider comparison, dashboard and cloud deployment remain later work.
+Current checkpoint: Phases 5, 6A–6C, 7, and 8A have been implemented locally. Browser voice uses LiveKit media with dedicated Gemini transcription and speech synthesis, the same saved five-agent chat, and explicit UI confirmations. A real two-turn audio conversation and desktop/mobile browser checks passed. Phase 8B has local Plivo and Twilio call paths, owner controls, consent, signed callbacks, and provider-free tests; its multi-turn real-call exit gate is still open. Phase 9 has 2/3/5 runtime roles, Blackboard/direct context delivery, ReAct/few-shot prompts, a seven-case pilot, a 60-case benchmark manifest, owner-only saved plans, an optional worker, side-by-side comparisons, human review and exports. Provider-backed comparison, measured cost estimates, benchmark review and cloud deployment remain later work.
 
 ## 3. Professor's requirements and acceptance evidence
 
@@ -202,7 +202,7 @@ Use real persisted execution events. Clearly label mock/provider-free developmen
 
 ## 10. Browser voice and actual phone calls
 
-Keep browser voice as Phase 8A and actual outbound telephone calling as Phase 8B. In the phone demonstration, the project owner starts an approved test call, the professor answers on a normal phone, asks questions, and hears BankAI responses. Twilio Programmable Voice is the selected provider and supplies phone connectivity, speech gathering and spoken playback; the existing browser voice path remains on LiveKit and Gemini. Twilio's current trial outbound API only accepts sample voice URLs, so the BankAI custom conversation requires an account that permits its own Voice webhook. A configured public HTTPS callback is required; browser microphone support alone does not satisfy the phone exit gate.
+Keep browser voice as Phase 8A and actual outbound telephone calling as Phase 8B. In the phone demonstration, the project owner starts an approved test call, the professor answers on a normal phone, asks questions, and hears BankAI responses. Plivo Voice is the selected provider for the current phone test and supplies phone connectivity, speech gathering and spoken playback; the Twilio path remains available. The existing browser voice path remains on LiveKit and Gemini. A configured public HTTPS callback is required; browser microphone support alone does not satisfy the phone exit gate.
 
 Use the same five-agent backend, validated final response, ownership rules, and synthetic banking session for both channels. Browser and phone components do not add agent roles. Correlate speech, call, and agent events with the same run/session identifiers.
 

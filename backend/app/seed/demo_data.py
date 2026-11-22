@@ -2,7 +2,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from hashlib import sha256
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pwdlib import PasswordHash
 from sqlalchemy import select, text
@@ -179,6 +179,65 @@ def seed_demo(session: Session) -> dict[str, int]:
         request_id="demo-seed-v1",
         created_at=SEED_DATE,
     )
+    return counts
+
+
+def seed_owner_demo(session: Session, owner_id: UUID) -> dict[str, int]:
+    """Add independent fictional banking records to the configured demo owner."""
+    owner = session.get(Customer, owner_id)
+    if owner is None or not owner.is_active or owner.email.endswith("@bankai.example"):
+        raise ValueError("A separate active owner account is required.")
+    session.execute(text("SELECT pg_advisory_xact_lock(2026112001)"))
+    counts: dict[str, int] = {}
+
+    def add(model, key, **values):
+        result = session.execute(
+            insert(model)
+            .values(id=demo_id(f"owner-{owner_id}-{key}"), **values)
+            .on_conflict_do_nothing(index_elements=["id"])
+            .returning(model.id)
+        )
+        counts[model.__tablename__] = counts.get(model.__tablename__, 0) + int(result.scalar_one_or_none() is not None)
+
+    suffix = owner_id.hex[:8].upper()
+    if session.scalar(select(KYCRecord.id).where(KYCRecord.customer_id == owner_id)) is None:
+        add(KYCRecord, "kyc", customer_id=owner_id, status="verified",
+            notes="Synthetic demo KYC; no banking identity document collected.", last_updated=SEED_DATE)
+    else:
+        counts["kyc_records"] = 0
+    add(Loan, "loan", customer_id=owner_id, loan_type="personal",
+        requested_amount=Decimal("120000.00"), annual_interest_rate=Decimal("10.5000"),
+        tenure_months=24, status="draft", created_at=SEED_DATE)
+    add(SupportTicket, "ticket", customer_id=owner_id, category="demo_support",
+        subject="Demo banking inquiry", description="Fictional account support scenario.",
+        status="open", priority="normal", created_at=SEED_DATE, updated_at=SEED_DATE)
+    profiles = (
+        ("savings", "SAV", "25000.00", "9001", "active", (
+            ("credit", "15000.00", "Demo opening deposit"),
+            ("credit", "12000.00", "Demo salary credit"),
+            ("debit", "750.00", "Demo grocery purchase"),
+            ("debit", "1250.00", "Demo utility payment"),
+        )),
+        ("current", "CUR", "4500.00", "9002", "blocked", (
+            ("credit", "5000.00", "Demo opening deposit"),
+            ("debit", "500.00", "Demo transport fare"),
+        )),
+    )
+    for kind, code, balance, card_suffix, card_status, entries in profiles:
+        account_id = demo_id(f"owner-{owner_id}-account-{code}")
+        add(Account, f"account-{code}", customer_id=owner_id,
+            account_number=f"DEMO-OWN-{suffix}-{code}", account_type=kind,
+            currency="INR", balance=Decimal(balance), status="active", created_at=SEED_DATE)
+        for position, (direction, amount, description) in enumerate(entries):
+            add(Transaction, f"transaction-{code}-{position}", account_id=account_id,
+                transaction_type=direction, amount=Decimal(amount), description=description,
+                merchant="Demo Merchant" if direction == "debit" else None,
+                reference_code=f"DEMO-OWN-TXN-{suffix}-{code}-{position:02d}",
+                status="completed", occurred_at=SEED_DATE + timedelta(days=position))
+        # shortcut: one configured owner seed uses reserved card suffixes; allocate dynamically for multiple owners.
+        add(Card, f"card-{code}", customer_id=owner_id, account_id=account_id,
+            masked_card_number=f"DEMO-XXXX-{card_suffix}", card_type="debit",
+            status=card_status, expiry_month=12, expiry_year=2030, created_at=SEED_DATE)
     return counts
 
 

@@ -46,6 +46,20 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+  evaluation-worker:
+    profiles: ["evaluation"]
+    build: ./backend
+    command: ["python", "-m", "evals.run_worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://bankai:bankai_dev_only@db:5432/bankai
+    volumes:
+      - ./data:/app/data:ro
+    depends_on:
+      backend:
+        condition: service_healthy
   livekit:
     profiles: ["voice"]
     image: livekit/livekit-server:v1.13.10

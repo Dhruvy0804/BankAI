@@ -1,4 +1,4 @@
-"""Owner-only outbound demo call and signed Twilio callbacks."""
+"""Owner-only outbound demo call and signed provider callbacks."""
 
 from datetime import UTC, datetime
 from typing import Literal
@@ -13,16 +13,16 @@ from sqlalchemy import select
 from app.api.deps import DB, Actor
 from app.core.errors import APIError
 from app.core.security import issue_token
-from app.models import ChatTurn, Conversation, Customer, PhoneCall, PhoneEvent
+from app.models import Account, ChatTurn, Conversation, Customer, PhoneCall, PhoneEvent
 from app.schemas import Input
 from app.seed.demo_data import demo_id
-from app.services.phone import TERMINAL, verify_twilio
+from app.services.phone import DAILY_CALL_LIMIT, TERMINAL, verify_plivo, verify_twilio
 
 router = APIRouter(prefix="/api/v1/phone", tags=["Phone test"])
 
 
 class PhoneStart(Input):
-    demo_customer: Literal["asha", "ravi", "mira"]
+    demo_customer: Literal["owner", "asha", "ravi", "mira"]
     number: str = Field(pattern=r"^\+[1-9]\d{7,14}$")
     recipient_agreed: bool
 
@@ -57,7 +57,7 @@ def output(row):
 @router.get("/config")
 def config(request: Request, customer: Actor):
     owner(request, customer)
-    return {"allowed_numbers": [n.strip() for n in request.app.state.settings.phone_allowed_numbers.split(",") if n.strip()], "max_duration_seconds": request.app.state.settings.phone_max_duration_seconds}
+    return {"allowed_numbers": [n.strip() for n in request.app.state.settings.phone_allowed_numbers.split(",") if n.strip()], "max_duration_seconds": request.app.state.settings.phone_max_duration_seconds, "max_daily_attempts": DAILY_CALL_LIMIT, "provider": request.app.state.settings.phone_provider}
 
 
 @router.post("/calls", status_code=201)
@@ -65,11 +65,16 @@ async def create(data: PhoneStart, request: Request, db: DB, customer: Actor):
     owner(request, customer)
     if not data.recipient_agreed:
         raise APIError(422, "CONSENT_REQUIRED", "Confirm the recipient agreed before dialing.")
-    demo_index = {"asha": 1, "ravi": 2, "mira": 3}[data.demo_customer]
-    demo_customer_id = demo_id(f"customer-{demo_index}")
+    if data.demo_customer == "owner":
+        demo_customer_id = customer.id
+    else:
+        demo_index = {"asha": 1, "ravi": 2, "mira": 3}[data.demo_customer]
+        demo_customer_id = demo_id(f"customer-{demo_index}")
     demo = db.get(Customer, demo_customer_id)
     if demo is None or not demo.is_active:
         raise APIError(503, "DEMO_ACCOUNT_MISSING", "The selected fictional account is unavailable.")
+    if data.demo_customer == "owner" and db.scalar(select(Account.id).where(Account.customer_id == customer.id)) is None:
+        raise APIError(503, "DEMO_ACCOUNT_MISSING", "Your fictional owner account is unavailable.")
     conversation = Conversation(customer_id=demo_customer_id, title="Phone demonstration")
     db.add(conversation)
     db.flush()
@@ -107,10 +112,13 @@ async def end(call_id: UUID, request: Request, db: DB, customer: Actor):
     elif row.status not in TERMINAL:
         if not row.provider_sid:
             raise APIError(409, "PHONE_SESSION_LOST", "Call control is unavailable after a restart.")
-        await request.app.state.phone.provider("POST", row.provider_sid, data={"Status": "completed"})
+        if request.app.state.settings.phone_provider == "plivo":
+            await request.app.state.phone.provider("DELETE", row.provider_sid)
+        else:
+            await request.app.state.phone.provider("POST", row.provider_sid, data={"Status": "completed"})
         row.status = "ended"
         db.add(PhoneEvent(call_id=row.id, kind="call_ended", payload={"reason": "owner_ended_after_restart"}))
-    return {"status": "ended"}
+    return {"status": call.status if call else "ended"}
 
 
 @router.post("/hooks/{call_id}/{action}", include_in_schema=False)
@@ -129,15 +137,27 @@ async def webhook(call_id: UUID, action: str, request: Request):
     if len(params) != len(pairs):
         raise APIError(403, "PHONE_WEBHOOK_SIGNATURE", "Invalid provider callback signature.")
     path = request.url.path + ("?" + request.url.query if request.url.query else "")
-    if not verify_twilio(settings, path, params, request.headers.get("x-twilio-signature", "")):
+    if settings.phone_provider == "plivo":
+        valid = verify_plivo(
+            settings, path, params,
+            request.headers.get("x-plivo-signature-v3", ""),
+            request.headers.get("x-plivo-signature-v3-nonce", ""),
+        )
+    else:
+        valid = verify_twilio(settings, path, params, request.headers.get("x-twilio-signature", ""))
+    if not valid:
         raise APIError(403, "PHONE_WEBHOOK_SIGNATURE", "Invalid provider callback signature.")
-    if params.get("AccountSid") != settings.twilio_account_sid.get_secret_value():
+    if settings.phone_provider == "twilio" and params.get("AccountSid") != settings.twilio_account_sid.get_secret_value():
         raise APIError(403, "PHONE_WEBHOOK_ACCOUNT", "Provider account mismatch.")
     manager = request.app.state.phone
     call = manager.calls.get(call_id)
     if call is None:
         return Response(content="<Response><Hangup/></Response>", media_type="application/xml")
-    call = manager.bind(call_id, params.get("CallSid", ""))
+    call = manager.bind(
+        call_id,
+        params.get("CallUUID", "") if settings.phone_provider == "plivo" else params.get("CallSid", ""),
+        params.get("RequestUUID", "") if settings.phone_provider == "plivo" else "",
+    )
     with manager.factory() as db:
         row = db.get(PhoneCall, call_id)
         expired = row is None or row.expires_at <= datetime.now(UTC)
@@ -157,12 +177,16 @@ async def webhook(call_id: UUID, action: str, request: Request):
         xml = manager.intro(call)
     elif action == "consent":
         xml = manager.consent(call, params.get("Digits", ""))
+    elif action == "retry" and settings.phone_provider == "plivo":
+        xml = manager.retry(call)
     elif action == "ask":
         try:
             step = int(request.query_params.get("step", "-1"))
         except ValueError as exc:
             raise APIError(400, "PHONE_TURN", "Invalid phone question.") from exc
-        xml = manager.ask(call, step, params.get("SpeechResult", ""))
+        xml = manager.ask(call, step, params.get("Speech", "") if settings.phone_provider == "plivo" else params.get("SpeechResult", ""))
+    elif action == "playback" and settings.phone_provider == "plivo":
+        xml = manager.playback(call)
     else:
         raise APIError(404, "PHONE_WEBHOOK_ACTION", "Unknown phone callback.")
     return Response(content=xml, media_type="application/xml")

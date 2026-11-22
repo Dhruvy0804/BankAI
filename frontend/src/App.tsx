@@ -1,11 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { ArrowLeftRight, Bot, ChevronLeft, ChevronRight, CircleHelp, CreditCard, Landmark, LayoutDashboard, LifeBuoy, LogOut, ShieldCheck, Wallet } from "lucide-react";
+import { ArrowLeftRight, Bot, ChartNoAxesCombined, ChevronLeft, ChevronRight, CircleHelp, CreditCard, Landmark, LayoutDashboard, LifeBuoy, LogOut, ShieldCheck, Wallet } from "lucide-react";
 import { ApiError, type Api, type Customer, request, useResource } from "./api";
 import { Button } from "./components/ui/button";
 import { ResourceState } from "./components";
 import Login, { type Session } from "./Login";
 import Chat from "./Chat";
+import Evaluation from "./Evaluation";
 import {
   Accounts,
   Cards,
@@ -25,6 +26,7 @@ const navigation = [
   ["loans", "Loans", Landmark],
   ["support", "Support", LifeBuoy],
   ["chat", "Text assistant", Bot],
+  ["evaluation", "Evaluation lab", ChartNoAxesCombined],
   ["about", "About", CircleHelp],
 ] as const;
 type Page = (typeof navigation)[number][0];
@@ -60,6 +62,12 @@ function BankingWorkspace({ api, signOut }: { api: Api; signOut: () => void }) {
   const customer = useResource<Customer>(api, "/auth/me");
   const [page, setPage] = useState<Page>(currentPage);
   const [collapsed, setCollapsed] = useState(false);
+  const [evaluationOwner, setEvaluationOwner] = useState(false);
+  const [evaluationLive, setEvaluationLive] = useState(false);
+  useEffect(() => { api<{ live_enabled: boolean }>("/evaluation/config").then((config) => {
+    setEvaluationOwner(true);
+    setEvaluationLive(config.live_enabled);
+  }, () => setEvaluationOwner(false)); }, [api]);
   useEffect(() => {
     const changed = () => setPage(currentPage());
     window.addEventListener("hashchange", changed);
@@ -77,7 +85,7 @@ function BankingWorkspace({ api, signOut }: { api: Api; signOut: () => void }) {
           <Button variant="ghost" size="icon" className="sidebar-toggle" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setCollapsed(!collapsed)}>{collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</Button>
         </div>
         <nav aria-label="Main navigation">
-          {navigation.map(([value, text, Icon]) => (
+          {navigation.filter(([value]) => value !== "evaluation" || evaluationOwner).map(([value, text, Icon]) => (
             <a
               key={value}
               className={page === value ? "active" : ""}
@@ -138,7 +146,8 @@ function BankingWorkspace({ api, signOut }: { api: Api; signOut: () => void }) {
                 {page === "cards" && <Cards api={api} />}
                 {page === "loans" && <Loans api={api} />}
                 {page === "support" && <Support api={api} />}
-                {page === "chat" && <Chat api={api} />}
+                {page === "chat" && <Chat api={api} comparisonEnabled={evaluationOwner && evaluationLive} />}
+                {page === "evaluation" && <Evaluation api={api} />}
                 {page === "about" && <About />}
               </div>
             )}
@@ -170,13 +179,13 @@ function About() {
         blocking, EMI calculation, simulated loan applications and support
         tickets, five-agent text conversations with policy sources, and browser
         voice when the required providers are configured. The owner can also
-        configure a Twilio phone test for a selected fictional customer.
+        configure a Plivo or Twilio phone test for a selected fictional customer.
       </p>
       <h3>Coming next</h3>
       <p>
-        A verified live telephone demonstration and cloud deployment.
-        A private evaluation lab will compare the same tasks across 2, 3 and 5
-        total agents, including the supervisor.
+        A verified multi-turn telephone demonstration and cloud deployment.
+        The private evaluation lab can save comparison plans; paid benchmark
+        execution remains disabled until explicitly enabled.
       </p>
       <p className="muted">
         This local prototype uses React, TypeScript, FastAPI and PostgreSQL.

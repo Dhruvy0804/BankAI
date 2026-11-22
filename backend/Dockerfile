@@ -4,6 +4,7 @@ COPY pyproject.toml ./
 COPY requirements-dev.lock.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip python -c "import subprocess,tomllib; subprocess.check_call(['pip','install','-c','requirements-dev.lock.txt',*tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']])"
 COPY app ./app
+COPY evals ./evals
 COPY alembic.ini ./
 COPY alembic ./alembic
 RUN pip install --no-cache-dir --no-deps .

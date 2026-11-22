@@ -3,7 +3,7 @@ import { type Api, useAction, useResource } from "./api";
 import { ErrorNotice, ResourceState } from "./components";
 
 type Call = { id: string; demo_customer: string; destination_hint: string; status: string; expires_at: string; events?: { kind: string; run_id: string | null; metadata: unknown }[]; turns?: { question: string; answer: string; status: string; run_id: string }[] };
-type Config = { allowed_numbers: string[]; max_duration_seconds: number };
+type Config = { allowed_numbers: string[]; max_duration_seconds: number; max_daily_attempts: number; provider: "twilio" | "plivo" };
 const ended = new Set(["completed", "canceled", "busy", "failed", "no-answer", "ended", "error", "expired"]);
 
 export default function Phone({ api, busyChanged, disabled = false }: {
@@ -14,7 +14,7 @@ export default function Phone({ api, busyChanged, disabled = false }: {
   const action = useAction();
   const [agreed, setAgreed] = useState(false);
   const [number, setNumber] = useState("");
-  const [demoCustomer, setDemoCustomer] = useState("asha");
+  const [demoCustomer, setDemoCustomer] = useState("owner");
   const [activeId, setActiveId] = useState("");
   const [call, setCall] = useState<Call>();
   const callbacks = useRef({ busyChanged });
@@ -52,8 +52,8 @@ export default function Phone({ api, busyChanged, disabled = false }: {
   }, [activeId, api]);
 
   return <section className="notice" aria-label="Phone test">
-    <h3>Phone test with Twilio</h3>
-    <p>Call an approved test recipient using a selected fictional customer. The recipient must press 1 to agree before asking questions. Twilio handles speech recognition and playback; questions and answers appear in the phone conversation below. No call audio is recorded. Confirm simulated banking actions in the web app. Twilio trial accounts may reject BankAI's custom outbound call URL; check the Twilio error code before retrying.</p>
+    <h3>Phone test with {config.data?.provider === "plivo" ? "Plivo" : "Twilio"}</h3>
+    <p>Call an approved test recipient using a selected fictional customer. The recipient must press 1 to agree before asking questions. {config.data?.provider === "plivo" ? "Plivo" : "Twilio"} handles speech recognition and playback; questions and answers appear in the phone conversation below. No call audio is recorded. Confirm simulated banking actions in the web app.</p>
     <ResourceState {...config}>
       {config.data && <>
         <label>Approved number
@@ -63,13 +63,14 @@ export default function Phone({ api, busyChanged, disabled = false }: {
         </label>
         <label>Fictional customer
           <select value={demoCustomer} disabled={!!activeId || action.busy} onChange={(event) => setDemoCustomer(event.target.value)}>
+            <option value="owner">My fictional demo account</option>
             <option value="asha">Asha · verified KYC</option>
             <option value="ravi">Ravi · pending KYC</option>
             <option value="mira">Mira · rejected KYC</option>
           </select>
         </label>
-        <label><input type="checkbox" checked={agreed} disabled={!!activeId || action.busy} onChange={(event) => setAgreed(event.target.checked)} /> The recipient agreed to receive this test call.</label>
-        <p role="status">{activeId ? `Call: ${call?.status || "connecting"} · ${call?.destination_hint || "approved number"}` : `Calls end after ${config.data.max_duration_seconds / 60} minutes. Maximum two call attempts per UTC day.`}</p>
+        <label className="phone-consent"><input type="checkbox" checked={agreed} disabled={!!activeId || action.busy} onChange={(event) => setAgreed(event.target.checked)} /> The recipient agreed to receive this test call.</label>
+        <p role="status">{activeId ? `Call: ${call?.status || "connecting"} · ${call?.destination_hint || "approved number"}` : `Calls end after ${config.data.max_duration_seconds / 60} minutes. Maximum ${config.data.max_daily_attempts} call attempts per UTC day.`}</p>
         <div className="form-actions">
           {!activeId ? <button type="button" className="secondary" disabled={!agreed || !number || disabled || action.busy} onClick={() => void action.run(async () => {
             const result = await api<Call>("/phone/calls", { demo_customer: demoCustomer, number, recipient_agreed: true });

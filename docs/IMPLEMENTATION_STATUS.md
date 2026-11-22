@@ -1,6 +1,6 @@
 # Implementation status
 
-Updated: 2026-11-02. Active implementation: `BankAI_Implementation_Plan_2.md`.
+Updated: 2026-11-22. Active implementation: `BankAI_Implementation_Plan_2.md`.
 Original implementation-plan documents remain preserved; phased delivery.
 
 | Phase | Status |
@@ -16,10 +16,93 @@ Original implementation-plan documents remain preserved; phased delivery.
 | 6C: Main five-agent system | Complete locally; live five-role workflow, protected actions, callbacks, trace UI and Docker verified |
 | 7: RAG | Complete locally; approved corpus, embeddings, MCP retrieval, validated citations, live answers and desktop/mobile checks passed |
 | 8A: Browser voice | Implemented and locally verified with live two-turn audio, real WebRTC, browser controls and Docker transport |
-| 8B: Actual outbound telephone calling | Deferred at user request; Twilio local integration and provider-free tests passed, real approved call and cost evidence pending |
-| 9A: Evaluation runtime | In progress; 2/3/5 roles, Blackboard/direct context, ReAct/few-shot prompts, a seven-case pilot manifest and an isolated opt-in runner are locally tested |
-| 9B–9C: Evaluation web dashboard and benchmark readiness | Not started |
+| 8B: Actual outbound telephone calling | Plivo path added beside Twilio; signed callback, consent, speech, transfer and hangup passed provider-free tests. A real approved call and cost evidence are pending |
+| 9A: Evaluation runtime | Local implementation; 2/3/5 roles, Blackboard/direct context, ReAct/few-shot prompts, seven-case pilot and 60-case/900-attempt manifest; provider-backed pilot pending |
+| 9B: Private evaluation web dashboard | Local implementation; owner plans, persisted jobs/attempts, worker, comparisons, review and exports; live-run acceptance pending |
+| 9C: Local benchmark readiness | Provider-free checkpoint complete; runtime snapshot, fixture audit and provisional cost forecast documented. Real pilot, human scoring and measured budget pending |
 | 10: Final deployment/demo verification | Not started |
+
+## Plan 2 Phase 9 local evaluation lab (2026-11-20)
+
+On 2026-11-22, the owner ran one live text comparison. The 2- and 3-agent
+attempts completed; the 5-agent attempt failed after Gemini returned HTTP 429
+for its free-tier requests-per-minute quota. The worker now pauses between
+text configurations (65 seconds by default), stops on a detected quota error,
+and records a safe quota-specific failure code. This reduces bursts but cannot
+guarantee success when other traffic consumes the same provider quota. The
+failed historical attempt remains unchanged as evaluation evidence. The fix
+was verified with provider-free tests; no new Gemini request was made to test it.
+
+The owner can now type one question in Text assistant and choose **Compare
+2/3/5 agents** after acknowledging possible provider charges. The worker runs
+the same text question with each agent count in a fresh isolated schema that
+copies only that signed-in customer's fictional banking records. The question,
+answers, input/output tokens, elapsed time, model calls, tool calls, roles used,
+and dated-price cost estimates appear in Text assistant and Evaluation lab.
+These custom questions are intentionally unscored; answer quality requires
+human review. They are not phone-call evaluations. The earlier fixed pilot and
+benchmark UI remains accessible under an advanced disclosure. The text path
+was verified with 24 frontend tests, a production build, and four database
+evaluation-job tests using fake provider execution. No live comparison or paid
+provider call was initiated during this change.
+
+On 2026-11-22, at the owner's request, the ignored local `.env` was set to
+`EVALUATION_LIVE_ENABLED=true` and the optional evaluation worker was started.
+A new seven-case, 2/3/5-agent plan with a 21-attempt cap and dated Gemini
+pricing snapshot was saved. It remains `planned` with zero attempts: no live
+evaluation or provider charge was initiated. Starting the run still requires
+the owner to acknowledge possible provider costs in the private dashboard.
+
+The evaluation page now defaults to all seven pilot questions with only the
+2-, 3-, and 5-agent cells: 21 scheduled attempts at one repeat. A seven-row,
+three-column comparison shows saved answers, deterministic checks, latency and
+tokens together as attempts arrive. Pending results are labelled pending.
+The comparison now includes input/output tokens, model calls, tool calls,
+estimated token cost when a dated price snapshot exists, and human quality
+ratings when reviewed. The grouped table totals the same counts per 2-, 3-,
+and 5-agent configuration; CSV and Markdown exports include call counts.
+The updated frontend and backend were rebuilt locally; both HTTP checks passed.
+All 23 frontend tests, the production build, five evaluation unit tests and
+two database-backed evaluation-job tests passed. Live evaluation stays disabled.
+At the user's request, a planned job with zero attempts shows identical
+scripted fixture examples in the three columns, explicitly marked as an
+unmeasured preview. These examples are not saved as evaluation results or
+presented as agent outputs; live results replace them when available.
+This view displays real results only after a provider-backed run; no new
+provider calls were made for the UI change. Three focused frontend tests and a
+production build passed, along with five evaluation unit tests.
+
+The existing comparison runner now loads a 60-case benchmark across all seven
+categories, including multi-turn cases. The deterministic schedule produces
+900 attempts for three repeats across five controlled cells without provider
+calls. The owner-only evaluation API and web lab preview and save plans, enforce
+attempt caps, store jobs and attempts, show side-by-side answers and grouped
+metrics, support human quality notes, and export JSON, CSV or Markdown. The
+optional worker uses fresh isolated synthetic schemas for each attempt. It
+persists progress after each attempt; on restart, an in-flight job becomes
+interrupted and requires the owner's explicit cost acknowledgement to resume.
+Saved plans now freeze the selected model, framework versions and agent code
+fingerprint as well as the dataset. The start endpoint and worker reject a
+changed runtime. Scoring requires expected facts in the visible answer, and
+no-tool safety uses actual tool-call counts.
+Migration `0010` adds the job tables. A dated, owner-supplied token-price
+snapshot enables estimates when provider usage is complete. Missing usage is
+reported unavailable. `EVALUATION_LIVE_ENABLED=false` remains the default;
+no paid benchmark was started.
+
+Focused API and worker tests use the local PostgreSQL test schema and fake
+execution. Frontend tests cover provider-free planning. The actual provider
+pilot, human-scored output comparison, measured budget and full 900-attempt
+study are still required before the Phase 9 exit gate is complete.
+
+The [benchmark readiness note](PHASE9_BENCHMARK_READINESS.md) records the
+60-case distribution, arithmetic/embedding checks, 1,020 planned turns, and a
+provisional token-only paid-tier illustration of about $5.17 based on 21
+earlier app runs. It is not a measured evaluation cost or spending cap. Seven
+focused evaluation tests, including owner API and worker integration with
+isolated PostgreSQL, passed without provider calls. The full backend suite
+passed 145 tests with six opt-in skips. A real-provider pilot and
+human review remain necessary before Phase 9 can be marked complete.
 
 ## Guardrail hardening checkpoint
 
@@ -187,6 +270,39 @@ The latest local regression run passed **108 backend tests** with six opt-in
 tests skipped and **21 frontend tests**. Frontend production build and Ruff
 passed. The three new phone integration tests use a fake Twilio REST boundary;
 no real number was dialed.
+
+## Plan 2 Phase 8B: Plivo local checkpoint (2026-11-20)
+
+Plivo Voice is now selectable with `PHONE_PROVIDER=plivo`. The existing owner-only
+panel, allowlisted recipient, consent prompt, three-question limit, five-minute
+limit, and synthetic five-agent conversation are shared with Twilio. The Plivo
+path uses its Voice Call API, GetInput speech/DTMF XML, V3 signed callbacks,
+mid-call transfer for the assistant reply, and explicit hangup. Migration
+`0009` widens the provider call ID column to fit Plivo UUIDs. The earlier
+evaluation-jobs draft migration moved to `0010` to retain a linear history.
+
+Provider-free unit and PostgreSQL integration tests passed. The project owner
+reported purchasing a voice-enabled, approved Indian Plivo number. The Plivo
+auth settings, recipient sandbox verification, public HTTPS callback, real
+consented call, speech quality, and actual charges have not yet been verified.
+Therefore the real-call exit gate remains open. No Plivo API call was made here.
+
+On 2026-11-22 the owner attempted two Plivo calls. Plivo accepted outbound
+requests (HTTP 201), but no voice callbacks reached BankAI. The configured
+public ngrok address returned `ERR_NGROK_3200`; a later cancel of a no-longer-
+pending Plivo request returned HTTP 404 and left the UI showing dialing. BankAI
+now checks public `/ready` before dialing and clears a vanished Plivo request as
+an error state. Provider-free phone tests passed; a real connected call remains
+unverified until the owner restarts the public tunnel and checks Plivo call logs.
+The owner subsequently increased BankAI's local cap from two to four call
+attempts per UTC day; this does not change Plivo account limits or place a call.
+The current local cap is seven call attempts per UTC day.
+
+The separate owner login now has an idempotent local fictional profile seed:
+two accounts (INR 25,000 savings and INR 4,500 current), six matching
+transactions, two debit cards, a draft loan, and a support ticket. Existing
+owner KYC status is preserved. The phone panel can select **My fictional demo
+account** so a call and the owner's Accounts page refer to the same data.
 
 ## Plan 2 Phase 7: fictional policy retrieval
 

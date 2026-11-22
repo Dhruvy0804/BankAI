@@ -14,14 +14,50 @@ direct Gemini SDK adapter with Pydantic responses. Live model verification passe
 with the configured local provider. Phase 6 adds an ADK supervisor, four CrewAI
 specialists, A2A, MCP tools and a shared PostgreSQL Blackboard. Phase 7 adds
 fictional policy retrieval and validated source citations. Phase 8A adds browser
-voice through LiveKit and dedicated speech conversion. Phase 8B now includes a
-local Twilio phone-test integration; an actual call has not yet been verified.
-Evaluation execution remains later work. Active implementation follows
+voice through LiveKit and dedicated speech conversion. Phase 8B now includes
+local Plivo and Twilio phone-test integrations; multi-turn phone acceptance remains open.
+Phase 9 now has a 60-case benchmark manifest and a private owner evaluation lab
+for saved plans, run evidence, comparison, review and exports. The owner can also
+type a question in Text assistant and explicitly run a 2/3/5-agent comparison
+against their signed-in fictional account. Provider-backed comparisons require
+live enablement and a cost acknowledgement. Active implementation follows
 [Implementation Plan 2](BankAI_Implementation_Plan_2.md); the original plans are preserved.
 The phone test lets the configured owner start an approved call so the
-professor/recipient can speak with BankAI on a normal phone. Twilio credentials,
+professor/recipient can speak with BankAI on a normal phone. Plivo credentials,
 a public HTTPS callback and a live approved test are required to complete 8B.
 See [implementation status](docs/IMPLEMENTATION_STATUS.md).
+
+## Private evaluation lab (Plan 2 Phase 9)
+
+The simple path is **Text assistant → type a question → acknowledge possible
+model charges → Compare 2/3/5 agents**. The same question runs once for each
+agent count using the signed-in demo customer's fictional records. The page
+shows each answer, token counts, time, model/tool calls, roles used and estimated
+token cost. Evaluation lab shows the same saved text comparisons; fixed pilot
+and benchmark controls are under **Advanced fixed-question benchmarks**. This
+does not run from phone calls and does not automatically launch paid runs.
+Text comparisons pause 65 seconds between agent counts by default to reduce
+free-tier request bursts. Set `EVALUATION_CELL_COOLDOWN_SECONDS=0` in the ignored
+`.env` only when the provider quota supports faster runs.
+
+The configured evaluation owner (or existing phone owner) can open **Evaluation
+lab** to preview or save a plan with 2, 3 and 5 agents, Blackboard or direct
+messages, ReAct or few-shot prompts, one to three repeats, and a hard cap on
+attempts. Previewing and saving never call Gemini. The pilot has seven cases;
+the benchmark has 60 cases and its full three-repeat design has 900 attempts.
+The page can reopen saved runs, compare actual answers side by side, inspect
+traces and artifacts, record human quality scores, and export JSON, CSV or
+Markdown. Token-cost estimates require a dated price snapshot supplied by the
+owner; absent usage is shown as unavailable, not zero.
+
+The ignored `.env` keeps `EVALUATION_LIVE_ENABLED=false` by default. No paid
+evaluation has been run. Later, a provider-backed run requires an explicit
+owner start action, cost acknowledgement, the saved attempt cap, a dated price
+snapshot, and the optional `evaluation-worker` Compose profile. A worker
+restart marks an in-flight job interrupted, requiring manual review and resume
+to avoid silently repeating a charged attempt. Apply migration `0010` before
+using the lab. The real-provider pilot, human scoring, budget estimate and
+final repeated benchmark remain Phase 9 exit checks.
 
 ## Text assistant setup (Plan 2 Phase 5)
 
@@ -303,10 +339,10 @@ suppress playback but cannot guarantee cancellation of an already submitted
 provider/banking request or its charges. Check saved history before retrying.
 No automatic replay/reconnect is performed. If TTS fails, the saved text remains.
 
-## Twilio phone test (Plan 2 Phase 8B, local integration)
+## Phone test (Plan 2 Phase 8B, local integration)
 
-The owner-only phone panel uses Twilio Programmable Voice to call an approved
-number. Twilio gathers speech and reads the answer; the question still goes
+The owner-only phone panel uses Plivo Voice or Twilio Programmable Voice to call an approved
+number. The selected provider gathers speech and reads the answer; the question still goes
 through the same authenticated five-agent chat in a separate selected fictional
 customer conversation. The owner can read those turns in the phone panel. This
 path does not need a LiveKit SIP trunk. Browser voice continues
@@ -316,34 +352,49 @@ Create a **separate owner account** at `http://localhost:8000/docs`: open
 `POST /api/v1/auth/register`, choose **Try it out**, and submit a name, email,
 and password of at least 12 characters. Copy the `id` from its response into
 `PHONE_OWNER_CUSTOMER_ID`, then sign in to the web app with that account. Do
-not use a seeded `demo.*@bankai.example` account for outbound calls. Set these
+not use a seeded `demo.*@bankai.example` account for outbound calls. To give
+the owner a separate fictional banking profile, run
+`docker compose exec backend python -m app.seed.owner_demo` after migrations.
+This adds two accounts, six transactions, two cards, a draft loan and a support
+ticket without changing existing owner records; rerunning it is safe. The
+phone panel's **My fictional demo account** option uses this same profile.
+Set these
 values in the ignored root `.env` (never commit them):
 
 ```dotenv
 PHONE_ENABLED=true
+PHONE_PROVIDER=plivo
 PHONE_OWNER_CUSTOMER_ID=owner-UUID-from-auth-me
-TWILIO_ACCOUNT_SID=your-AC-prefixed-account-SID
-TWILIO_AUTH_TOKEN=your-Twilio-primary-auth-token
+PLIVO_AUTH_ID=your-Plivo-auth-ID
+PLIVO_AUTH_TOKEN=your-Plivo-auth-token
 PHONE_PUBLIC_BASE_URL=https://your-public-backend-host
-PHONE_CALLER_NUMBER=your-Twilio-trial-or-verified-caller-ID-in-E164
+PHONE_CALLER_NUMBER=your-voice-enabled-Plivo-number-in-E164
 PHONE_ALLOWED_NUMBERS=the-consenting-verified-recipient-in-E164
 PHONE_MAX_DURATION_SECONDS=300
 ```
 
 The public URL must forward HTTPS POST requests to this backend, preserving the
-original path and query string. Twilio signs the callback against that exact
-public URL. A localhost URL cannot receive a call webhook. Apply migration
-`0007`, restart the backend, and sign in as the configured owner. The Text
-assistant then shows **Phone test with Twilio**. Confirm the recipient agreed,
+original path and query string. The provider signs the callback against that exact
+public URL. A localhost URL cannot receive a call webhook. Check
+`https://your-public-backend-host/ready` in a browser before calling; it must
+return `{"status":"ready"}`. If ngrok reports `ERR_NGROK_3200`, restart the
+tunnel with `ngrok http 8000`, update `PHONE_PUBLIC_BASE_URL` if its HTTPS address
+changed, and recreate the backend. BankAI now rejects a call before dialing when
+this public readiness check fails. Apply migrations,
+restart the backend, and sign in as the configured owner. The Text
+assistant then shows **Phone test with Plivo**. Confirm the recipient agreed,
 select the allowlisted number and fictional customer, and start the call. The recipient hears the
 fictional-demo disclosure, presses **1** to agree, and can ask up to three
 questions. Banking action confirmations remain in the web app.
 
-The backend allows one active call, at most two attempts per UTC day, and up to
+The backend allows one active call, at most four attempts per UTC day, and up to
 five minutes per call. It does not redial or record audio; only masked number
 suffixes, status events, and consented chat transcripts are saved locally.
-Twilio may store its own call metadata under your account. End call is available
-in the owner panel. Twilio's current trial outbound Call API requires a Twilio
+The provider may store its own call metadata under your account. End call is available
+in the owner panel. Plivo trial calling requires a verified sandbox destination and an approved
+voice-enabled caller number. For Twilio, set `PHONE_PROVIDER=twilio`, use
+`TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` instead of the Plivo credentials, and
+use a Twilio caller number. Twilio's current trial outbound Call API requires a Twilio
 sample voice URL; BankAI sends its own URL for the five-agent conversation, so
 this outbound path requires an account that permits custom call instructions.
 The [Voice trial rules](https://www.twilio.com/docs/usage/trials/try-out-voice)

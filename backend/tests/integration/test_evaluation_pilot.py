@@ -25,7 +25,8 @@ def test_isolated_pilot_records_real_protocol_trace_without_provider_calls(simul
         with isolated_runtime(settings) as (isolated_settings, factory):
             result = execute_case(isolated_settings, factory, case, AgentConfiguration(), 1)
             assert result["status"] == "completed"
-            assert result["score"]["passed"]
+            assert not result["score"]["passed"]
+            assert not result["score"]["checks"]["facts"]  # Fake supervisor omits the verified EMI.
             assert result["model_calls"] > 0 and result["tool_calls"] > 0
             assert any(event["kind"] == "a2a_result" for event in result["events"])
         with engine.connect() as connection:

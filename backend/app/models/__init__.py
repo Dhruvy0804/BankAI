@@ -20,6 +20,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -296,6 +297,25 @@ class AgentEvent(IdentityMixin, CreatedMixin, Base):
     payload: Mapped[dict] = mapped_column(JSONB, default=dict)
 
 
+class EvaluationJob(IdentityMixin, CreatedMixin, Base):
+    __tablename__ = "evaluation_jobs"
+    __table_args__ = (Index("uq_evaluation_one_active", text("(true)"), unique=True,
+                            postgresql_where=text("status IN ('queued', 'running', 'cancel_requested')")),)
+    owner_id: Mapped[UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    status: Mapped[str] = mapped_column(String(16), default="queued")
+    manifest: Mapped[dict] = mapped_column(JSONB)
+    error: Mapped[str | None] = mapped_column(String(80))
+
+
+class EvaluationAttempt(IdentityMixin, CreatedMixin, Base):
+    __tablename__ = "evaluation_attempts"
+    __table_args__ = (UniqueConstraint("job_id", "position", name="uq_evaluation_attempt_position"),)
+    job_id: Mapped[UUID] = mapped_column(ForeignKey("evaluation_jobs.id"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    result: Mapped[dict] = mapped_column(JSONB)
+    review: Mapped[dict | None] = mapped_column(JSONB)
+
+
 class VoiceSession(IdentityMixin, CreatedMixin, Base):
     __tablename__ = "voice_sessions"
     customer_id: Mapped[UUID] = mapped_column(ForeignKey("customers.id"), index=True)
@@ -318,7 +338,7 @@ class PhoneCall(IdentityMixin, CreatedMixin, Base):
     conversation_id: Mapped[UUID] = mapped_column(ForeignKey("conversations.id"))
     demo_customer: Mapped[str] = mapped_column(String(12))
     destination_hint: Mapped[str] = mapped_column(String(8))
-    provider_sid: Mapped[str | None] = mapped_column(String(34), unique=True)
+    provider_sid: Mapped[str | None] = mapped_column(String(36), unique=True)
     status: Mapped[str] = mapped_column(String(24), default="dialing")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
