@@ -1,11 +1,13 @@
 import hashlib
 import json
 from time import monotonic
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import Field, ValidationError
 from sqlalchemy import select
 
@@ -216,7 +218,10 @@ def execute_tool(factory, settings, name, arguments):
 
 def create_mcp(factory, settings):
     server = FastMCP(
-        "BankAI banking tools", stateless_http=True, json_response=True, streamable_http_path="/"
+        "BankAI banking tools", stateless_http=True, json_response=True, streamable_http_path="/",
+        transport_security=TransportSecuritySettings(
+            allowed_hosts=[urlsplit(settings.agent_base_url).netloc]
+        ),
     )
 
     @server.tool()
