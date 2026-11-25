@@ -7,7 +7,7 @@ COPY app ./app
 COPY evals ./evals
 COPY alembic.ini ./
 COPY alembic ./alembic
-RUN pip install --no-cache-dir --no-deps .
+RUN pip install --no-build-isolation --no-cache-dir --no-deps .
 RUN useradd --create-home bankai
 USER bankai
 EXPOSE 8000
