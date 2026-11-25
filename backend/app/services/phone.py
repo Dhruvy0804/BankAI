@@ -20,7 +20,7 @@ from app.models import PhoneCall, PhoneEvent
 from app.services.speech import spoken_answer
 
 TERMINAL = {"completed", "canceled", "busy", "failed", "no-answer", "ended", "error"}
-DAILY_CALL_LIMIT = 7
+DAILY_CALL_LIMIT = 10
 SID = re.compile(r"CA[0-9a-fA-F]{32}\Z")
 PLIVO_ID = re.compile(r"[0-9a-fA-F-]{36}\Z")
 

@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.core.security import LoginLimiter
 from app.models import AuditLog, Card, Customer, KYCRecord, Loan, PendingAction
+from app.schemas import Register
+from app.seed.cloud_owner import create_owner
 from app.seed.demo_data import DEMO_PASSWORD, demo_id
 from app.services.banking import BankingService
 
@@ -64,6 +66,40 @@ def test_login_registration_and_own_accounts(api):
         ]
         == "pending"
     )
+
+
+def test_cloud_demo_blocks_public_seed_logins_and_registration(api):
+    client, _ = api
+    settings = client.app.state.settings
+    settings.app_env = "cloud_demo"
+    denied = client.post(
+        "/api/v1/auth/login",
+        json={"email": "demo.asha@bankai.example", "password": DEMO_PASSWORD},
+    )
+    assert denied.status_code == 401
+    assert client.post(
+        "/api/v1/auth/register",
+        json={"full_name": "Visitor", "email": "visitor@example.com", "password": "Synthetic-password-123!"},
+    ).status_code == 403
+
+
+def test_cloud_demo_owner_can_log_in_after_private_bootstrap(api):
+    client, connection = api
+    client.app.state.settings.app_env = "cloud_demo"
+    password = "Private-cloud-owner-password-123!"
+    with Session(connection) as db, db.begin():
+        owner = create_owner(db, Register(
+            full_name="Cloud Demo Owner", email="cloud-owner@example.com", password=password,
+        ))
+        owner_id = owner.id
+    response = client.post(
+        "/api/v1/auth/login", json={"email": "cloud-owner@example.com", "password": password},
+    )
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    assert client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"},
+    ).json()["id"] == str(owner_id)
 
 
 @pytest.mark.parametrize(

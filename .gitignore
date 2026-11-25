@@ -11,6 +11,7 @@ node_modules/
 .npm-cache/
 .qa-tools/
 .artifacts/
+.ppt_build/
 dist/
 coverage/
 *.tsbuildinfo
@@ -18,3 +19,4 @@ evaluation/results/*
 !evaluation/results/.gitkeep
 *.log
 .DS_Store
+deploy/azure/.env

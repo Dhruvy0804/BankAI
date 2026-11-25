@@ -296,7 +296,7 @@ an error state. Provider-free phone tests passed; a real connected call remains
 unverified until the owner restarts the public tunnel and checks Plivo call logs.
 The owner subsequently increased BankAI's local cap from two to four call
 attempts per UTC day; this does not change Plivo account limits or place a call.
-The current local cap is seven call attempts per UTC day.
+The current local cap is ten call attempts per UTC day.
 
 The separate owner login now has an idempotent local fictional profile seed:
 two accounts (INR 25,000 savings and INR 4,500 current), six matching

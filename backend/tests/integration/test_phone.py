@@ -151,13 +151,13 @@ def test_owner_phone_profile_uses_owner_banking_records(phone):
     assert client.post(f"/api/v1/phone/calls/{created.json()['id']}/end", headers=headers, json={}).status_code == 200
 
 
-def test_seven_daily_attempts_are_allowed_but_eighth_is_rejected(phone):
+def test_ten_daily_attempts_are_allowed_but_eleventh_is_rejected(phone):
     from datetime import UTC, datetime, timedelta
 
     settings, factory, client, conversation_id, headers, _sent = phone
-    assert client.get("/api/v1/phone/config", headers=headers).json()["max_daily_attempts"] == 7
+    assert client.get("/api/v1/phone/config", headers=headers).json()["max_daily_attempts"] == 10
     with factory() as db, db.begin():
-        for _ in range(6):
+        for _ in range(9):
             db.add(PhoneCall(
                 customer_id=UUID(settings.phone_owner_customer_id),
                 conversation_id=UUID(conversation_id), demo_customer="asha",
@@ -165,12 +165,12 @@ def test_seven_daily_attempts_are_allowed_but_eighth_is_rejected(phone):
                 expires_at=datetime.now(UTC) + timedelta(minutes=5),
             ))
     payload = {"demo_customer": "asha", "number": NUMBER, "recipient_agreed": True}
-    seventh = client.post("/api/v1/phone/calls", headers=headers, json=payload)
-    assert seventh.status_code == 201
-    assert client.post(f"/api/v1/phone/calls/{seventh.json()['id']}/end", headers=headers, json={}).status_code == 200
-    eighth = client.post("/api/v1/phone/calls", headers=headers, json=payload)
-    assert eighth.status_code == 429
-    assert "7-call limit" in eighth.json()["error"]["message"]
+    tenth = client.post("/api/v1/phone/calls", headers=headers, json=payload)
+    assert tenth.status_code == 201
+    assert client.post(f"/api/v1/phone/calls/{tenth.json()['id']}/end", headers=headers, json={}).status_code == 200
+    eleventh = client.post("/api/v1/phone/calls", headers=headers, json=payload)
+    assert eleventh.status_code == 429
+    assert "10-call limit" in eleventh.json()["error"]["message"]
 
 
 def test_plivo_signed_consent_question_and_playback(phone, simulated_models, monkeypatch):  # noqa: F811

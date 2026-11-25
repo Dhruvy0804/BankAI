@@ -8,7 +8,7 @@ afterEach(cleanup);
 test("phone panel dials only after owner confirms recipient agreement and can end the call", async () => {
   let started = false;
   const request = vi.fn(async (path: string, body?: unknown) => {
-    if (path === "/phone/config") return { allowed_numbers: ["+919876543210"], max_duration_seconds: 300, max_daily_attempts: 7, provider: "plivo" };
+    if (path === "/phone/config") return { allowed_numbers: ["+919876543210"], max_duration_seconds: 300, max_daily_attempts: 10, provider: "plivo" };
     if (path === "/phone/calls" && body) { started = true; return { id: "call-1", demo_customer: "asha", destination_hint: "…3210", status: "dialing" }; }
     if (path === "/phone/calls") return started ? [{ id: "call-1", demo_customer: "asha", destination_hint: "…3210", status: "dialing" }] : [];
     if (path === "/phone/calls/call-1") return { id: "call-1", demo_customer: "asha", destination_hint: "…3210", status: "dialing", events: [] };
@@ -16,7 +16,7 @@ test("phone panel dials only after owner confirms recipient agreement and can en
   });
   render(<Phone api={request as Api} busyChanged={vi.fn()} />);
   expect(await screen.findByRole("heading", { name: "Phone test with Plivo" })).toBeInTheDocument();
-  expect(screen.getByText(/Maximum 7 call attempts per UTC day/)).toBeInTheDocument();
+  expect(screen.getByText(/Maximum 10 call attempts per UTC day/)).toBeInTheDocument();
   const dial = await screen.findByRole("button", { name: "Call approved number" });
   expect(dial).toBeDisabled();
   fireEvent.click(screen.getByRole("checkbox", { name: /recipient agreed/ }));

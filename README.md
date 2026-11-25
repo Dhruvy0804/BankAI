@@ -4,6 +4,8 @@ A local, fictional banking assistant and private agent-evaluation workspace.
 Main architecture: **5 total agents**, including Supervisor. Evaluation
 variants: **2, 3, and 5 total agents**, using the same banking capabilities.
 
+For the single-VM Azure demo setup, see [deploy/azure/README.md](deploy/azure/README.md).
+
 ## Current checkpoint
 
 Phases 0–7 and 8A: a working local banking web application with JWT login,
@@ -515,9 +517,9 @@ Login now works through `/api/v1/auth/login`. These are not production credentia
 Repeat seeding safely: existing IDs, passwords, balances and card states
 are preserved. A repeated unchanged seed reports zero inserted records.
 There is no destructive reset command. Test fixtures are disposable; do
-not downgrade or delete the demo database to rerun seeds. Local seed CLI
-rejects remote hosts and non-development mode. This guard is not a
-replacement for future authentication.
+not downgrade or delete the demo database to rerun seeds. The seed CLI
+requires development or explicit cloud demo mode and a local/internal
+database host. Cloud demo mode blocks login with the published seed passwords.
 
 Docker backend images now include the migration tooling and mount the
 sample corpus read-only. After starting Compose:

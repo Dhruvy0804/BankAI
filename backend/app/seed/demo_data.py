@@ -241,15 +241,15 @@ def seed_owner_demo(session: Session, owner_id: UUID) -> dict[str, int]:
     return counts
 
 
-def require_local_demo(settings: Settings):
+def require_demo_seed(settings: Settings):
     url = make_url(settings.database_url)
-    if settings.app_env != "development" or url.host not in {"localhost", "127.0.0.1", "::1", "db"}:
-        raise ValueError("Demo seeding is allowed only in a local development environment.")
+    if settings.app_env not in {"development", "cloud_demo"} or url.host not in {"localhost", "127.0.0.1", "::1", "db"}:
+        raise ValueError("Demo seeding requires development or cloud_demo and a local database host.")
 
 
 def main():
     settings = Settings()
-    require_local_demo(settings)
+    require_demo_seed(settings)
     engine = build_engine(settings)
     try:
         with Session(engine) as session, session.begin():

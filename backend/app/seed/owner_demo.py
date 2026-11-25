@@ -7,12 +7,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.db.session import build_engine
-from app.seed.demo_data import require_local_demo, seed_owner_demo
+from app.seed.demo_data import require_demo_seed, seed_owner_demo
 
 
 def main():
     settings = Settings()
-    require_local_demo(settings)
+    require_demo_seed(settings)
     if not settings.phone_owner_customer_id:
         raise ValueError("PHONE_OWNER_CUSTOMER_ID is required.")
     engine = build_engine(settings)

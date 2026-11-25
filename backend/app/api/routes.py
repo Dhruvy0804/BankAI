@@ -45,6 +45,9 @@ def throttle(request):
 @router.post("/auth/register", response_model=CustomerOut, status_code=201, tags=["Authentication"])
 def register(data: Register, request: Request, db: DB):
     throttle(request)
+    settings = request.app.state.settings
+    if settings.app_env == "cloud_demo":
+        raise APIError(403, "REGISTRATION_UNAVAILABLE", "Registration is unavailable.")
     if db.scalar(select(Customer.id).where(Customer.email == str(data.email))):
         raise APIError(409, "REGISTRATION_UNAVAILABLE", "Registration cannot be completed.")
     customer = Customer(
@@ -81,7 +84,12 @@ def login(data: Login, request: Request, db: DB):
     valid = passwords.verify(
         data.password.get_secret_value(), customer.password_hash if customer else DUMMY_HASH
     )
-    if not valid or customer is None or not customer.is_active:
+    if (
+        not valid
+        or customer is None
+        or not customer.is_active
+        or (request.app.state.settings.app_env == "cloud_demo" and customer.email.endswith("@bankai.example"))
+    ):
         raise APIError(
             401, "INVALID_CREDENTIALS", "Invalid email or password.", action="login_failed"
         )

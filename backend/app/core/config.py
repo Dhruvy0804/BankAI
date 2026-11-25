@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[3]
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore")
 
-    app_env: Literal["development", "test"] = "development"
+    app_env: Literal["development", "test", "cloud_demo"] = "development"
     database_url: str = Field(
         default="postgresql+psycopg://bankai:bankai_dev_only@127.0.0.1:55432/bankai",
         repr=False,
