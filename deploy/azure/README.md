@@ -10,7 +10,7 @@ In the VM network security group, allow inbound TCP **80** and **443**, TCP **78
 
 ## Prepare the VM
 
-The Azure deployment files must be committed and pushed to the GitHub branch you clone. They are currently local workspace changes; a fresh clone will not contain them until pushed. Never include any populated `.env` file in that commit.
+The Azure deployment files must be present on the VM. Clone the repository if it is accessible from the VM, or transfer a committed source archive over SSH if the repository is private. Never include any populated `.env` file in that archive or commit.
 
 1. Create the VM in the [Azure portal](https://portal.azure.com/) using an SSH key. Set the public IP to **Static**, assign its DNS name label, and record its public IP and full hostname. Do not create the VM until you have reviewed its monthly cost.
 2. SSH into the VM. [Install Docker Engine and the Compose plugin](https://docs.docker.com/engine/install/ubuntu/) from Docker's official Ubuntu repository, then confirm `docker compose version` works.
@@ -49,13 +49,14 @@ The last command should return `{"status":"ready","database":"connected"}`. Cadd
    ```
 
 2. Edit `deploy/azure/.env`: set `PHONE_OWNER_CUSTOMER_ID` and `EVALUATION_OWNER_CUSTOMER_ID` to that owner ID. Add rotated Plivo credentials, the approved destination and caller numbers, then set `PHONE_ENABLED=true` if you want telephone calling. Set `VOICE_ENABLED=true` if you want browser voice. Keep `EVALUATION_LIVE_ENABLED=false` until you intend to run paid model comparisons.
-3. Recreate backend and worker with the new settings, then seed the owner's fictional records:
+3. Recreate the backend with the new settings, then seed the owner's fictional records:
 
    ```bash
-   docker compose --env-file deploy/azure/.env -f deploy/azure/compose.yaml up -d --force-recreate backend evaluation-worker
+   docker compose --env-file deploy/azure/.env -f deploy/azure/compose.yaml up -d --force-recreate backend
    docker compose --env-file deploy/azure/.env -f deploy/azure/compose.yaml exec backend python -m app.seed.owner_demo
    ```
 
+   When you enable live evaluation and intend to use provider credits, start its worker with `docker compose --profile evaluation --env-file deploy/azure/.env -f deploy/azure/compose.yaml up -d evaluation-worker`.
 4. If policy answers are required, run `python -m app.services.policies` inside the backend container **once** after reviewing Gemini embedding usage. It makes provider calls for new or changed policy sections.
 5. Verify the web pages and text assistant first, then browser voice. For Plivo, check that `https://YOUR_AZURE_HOSTNAME/ready` works from the backend and that your configured Plivo number can place calls to the approved test recipient. The call is a real, potentially billable call.
 

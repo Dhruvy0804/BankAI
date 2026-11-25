@@ -40,6 +40,7 @@ services:
     restart: unless-stopped
 
   evaluation-worker:
+    profiles: ["evaluation"]
     build: ../../backend
     command: ["python", "-m", "evals.run_worker"]
     env_file: .env
